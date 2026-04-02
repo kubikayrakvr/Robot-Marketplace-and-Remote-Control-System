@@ -5,9 +5,9 @@ class User(Base):
     __tablename__ = "users"
 
     id         = Column(Integer, primary_key=True, index=True)
-    email      = Column(String, unique=True, index=True, nullable=False)
-    username   = Column(String, unique=True, index=True, nullable=False)
-    hashed_password = Column(String, nullable=False)
+    username   = Column(String, unique=True, index=True)
+    email      = Column(String, unique=True, index=True)
+    hashed_password = Column(String)
     is_active  = Column(Boolean, default=True)
-    is_admin   = Column(Boolean, default=False)
+    is_admin   = Column(Boolean, default=False) # Admin ayrımını yapan o kritik alan!
     created_at = Column(DateTime(timezone=True), server_default=func.now())

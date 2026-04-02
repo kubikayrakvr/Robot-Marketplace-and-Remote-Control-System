@@ -5,6 +5,10 @@ from app.routers import auth, users, admin
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
+from app.models import user, robot, audit # Tüm modelleri buraya çekmelisin!
+
+# Bu satır, yukarıda import edilen tüm modelleri DB'de oluşturur
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Robot API")
 
