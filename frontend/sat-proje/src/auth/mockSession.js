@@ -1,8 +1,8 @@
 const SESSION_KEY = 'satproje.session';
 
-export function saveMockSession(user) {
+export function saveMockSession({ token, user }) {
   const session = {
-    token: 'mock-jwt-token',
+    token,
     user,
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
