@@ -1,59 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { clearMockSession, getMockSession } from '../auth/mockSession';
 
 function UserPage() {
   const navigate = useNavigate();
-  const [user, setUser] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
-  useEffect(() => {
-    const fetchUser = async () => {
-      const session = getMockSession();
-      if (!session || !session.token) {
-        navigate('/login');
-        return;
-      }
-
-      try {
-        const response = await fetch(`${API_URL}/api/users/me`, {
-          headers: {
-            'Authorization': `Bearer ${session.token}`,
-          },
-        });
-
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-          // Session'ı güncelle
-          session.user = userData;
-          localStorage.setItem('satproje.session', JSON.stringify(session));
-        } else if (response.status === 401) {
-          // Token geçersiz, login'e yönlendir
-          clearMockSession();
-          navigate('/login');
-        } else {
-          console.error('User bilgileri alınamadı');
-        }
-      } catch (error) {
-        console.error('Fetch hatası:', error);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchUser();
-  }, [navigate, API_URL]);
-
-  if (loading) {
-    return <div>Yükleniyor...</div>;
-  }
-
-  if (!user) {
-    return <div>Kullanıcı bilgileri yüklenemedi.</div>;
-  }
+  const session = useMemo(() => getMockSession(), []);
+  const user = session?.user ?? { fullName: 'Altan', email: 'altan@example.com' };
 
   const actionCards = [
     { key: 'store', title: 'Magaza', subtitle: 'Yeni robotlari kesfet, teknik detaylari incele, satin alma adimina gec.', icon: '🛒' },
@@ -62,7 +14,7 @@ function UserPage() {
     { key: 'profile', title: 'Bilgilerim', subtitle: 'Profil, e-posta, guvenlik ayarlari ve hesap durumunu yonet.', icon: '👤' },
   ];
 
-  const firstName = user.username?.split(' ')[0] ?? 'Kullanıcı';
+  const firstName = user.fullName?.split(' ')[0] ?? 'Altan';
 
   function handleLogout() {
     clearMockSession();
@@ -90,7 +42,20 @@ function UserPage() {
 
         <section className="user-grid">
           {actionCards.map((item) => (
-            <button key={item.key} type="button" className="panel-card">
+            <button
+              key={item.key}
+              type="button"
+              className="panel-card"
+              onClick={() => {
+                if (item.key === 'store') {
+                  navigate('/user/shop');
+                } else if (item.key === 'robots') {
+                  navigate('/user/robotlarim');
+                } else if (item.key === 'control') {
+                  navigate('/user/kontrol');
+                }
+              }}
+            >
               <span className="panel-icon" aria-hidden="true">
                 {item.icon}
               </span>
