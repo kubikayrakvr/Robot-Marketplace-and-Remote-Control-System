@@ -1,0 +1,5 @@
+/**:
+  ros__parameters:
+    spawn_signal_topic: "/spawn_signal_topic"
+    sdf_package_name: "robot_spawner"
+    robot_sdf_path: "models/waffle/model.sdf"

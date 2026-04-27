@@ -1,40 +1,170 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import HTMLResponse
+#!/usr/bin/env python3
+"""
+Multi-Robot Fleet Dashboard — FastAPI backend
+Adds exclusive session management on top of the original prototype:
+
+  POST   /api/robot/{id}/claim      – Claim exclusive control (returns token or 423)
+  DELETE /api/robot/{id}/claim      – Release control
+  POST   /api/robot/{id}/heartbeat  – Keep the session alive (call every ~5 s)
+
+The RobotController C++ node independently enforces the session by watching
+the ROS topic  /{ns}/session/heartbeat.  FastAPI's session table is the
+claim/release gatekeeper; the ROS heartbeat is what actually gates motion.
+"""
+
+import asyncio
+import time
+import uuid
+import json
+import threading
+from typing import Optional
+
+# ROS 2 Imports
+import rclpy
+from rclpy.node import Node
+from nav_msgs.msg import Odometry
+from sensor_msgs.msg import Imu, LaserScan
+from geometry_msgs.msg import Pose
+from std_msgs.msg import String, Float32
+
+# FastAPI Imports
+from fastapi import FastAPI, Header, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 import uvicorn
+import httpx
 
 app = FastAPI()
 
-# ---------------------------------------------------------
-# Simulated Backend Database
-# Contains the last known spawn coordinates (x, y) for Gazebo
-# These are updated live as the robot moves
-# ---------------------------------------------------------
-ROBOT_DATABASE = {
-    "ROB-100": {
-        "namespace": "rob100",
-        "x": 2.0,
-        "y": 1.5
-    },
-    "ROB-200": {
-        "namespace": "rob200",
-        "x": -3.0,
-        "y": -1.0
-    },
-    "ROB-300": {
-        "namespace": "rob300",
-        "x": 5.0,
-        "y": 0.0
-    }
+# ── Session store ──────────────────────────────────────────────────────────────
+# { robot_id: { "token": str, "claimed_at": float, "last_heartbeat": float } }
+_sessions: dict[str, dict] = {}
+_active_ws: dict[str, WebSocket] = {}
+loop = None # Will store the main asyncio loop
+SESSION_TIMEOUT_S = 15.0  # Must match RobotController's session_timeout_
+
+# Serialises all claim attempts so the read-check-write in claim_robot() is
+# atomic with respect to other coroutines.  A per-robot lock would have finer
+# granularity but a single lock is simpler and claim is not a hot path.
+_claim_lock = asyncio.Lock()
+
+
+async def _reap_sessions():
+    """
+    Runs forever, cleaning up sessions whose last heartbeat is older than
+    SESSION_TIMEOUT_S.  This keeps the claim table consistent with what the
+    RobotController will have already auto-expired on the ROS side.
+    """
+    while True:
+        await asyncio.sleep(5)
+        now = time.time()
+        stale = [rid for rid, s in _sessions.items()
+                 if now - s["last_heartbeat"] > SESSION_TIMEOUT_S]
+        for rid in stale:
+            del _sessions[rid]
+            print(f"[session reaper] Session for {rid!r} expired and was removed.")
+
+
+# ── Database ───────────────────────────────────────────────────────────────────
+
+ROBOT_DATABASE: dict[str, dict] = {
+    "ROB-100": {"namespace": "rob100", "x": 2.0,  "y": 1.5 },
+    "ROB-200": {"namespace": "rob200", "x": -3.0, "y": -1.0},
+    "ROB-300": {"namespace": "rob300", "x": 5.0,  "y": 0.0 },
 }
+
 
 class PoseUpdate(BaseModel):
     x: float
     y: float
 
-# ---------------------------------------------------------
-# HTML Frontend (Embedded)
-# ---------------------------------------------------------
+
+# ── REST API ───────────────────────────────────────────────────────────────────
+
+@app.get("/api/robot/{robot_id}")
+async def get_robot_info(robot_id: str):
+    clean_id = robot_id.strip().upper()
+    if clean_id not in ROBOT_DATABASE:
+        raise HTTPException(status_code=404, detail="Robot ID not found")
+    robot = ROBOT_DATABASE[clean_id]
+    session = _sessions.get(clean_id)
+    return {
+        **robot,
+        "session_active": session is not None,
+    }
+
+
+@app.post("/api/robot/{robot_id}/claim")
+async def claim_robot(robot_id: str):
+    """
+    Attempt to claim exclusive control of a robot.
+
+    Returns:
+        200  { "token": "<uuid>" }   – claim granted
+        423  { "detail": "..." }     – robot is already in use
+        404  { "detail": "..." }     – robot ID not found
+    """
+    clean_id = robot_id.strip().upper()
+    if clean_id not in ROBOT_DATABASE:
+        raise HTTPException(status_code=404, detail="Robot ID not found")
+
+    # Hold the lock for the entire read-check-write sequence so two simultaneous
+    # claim requests cannot both pass the staleness check and both receive tokens.
+    async with _claim_lock:
+        existing = _sessions.get(clean_id)
+        if existing is not None:
+            # Allow re-claim only if the existing session has gone stale (no
+            # heartbeat within SESSION_TIMEOUT_S).  This is the inline equivalent
+            # of what the background reaper does, handling the race between a
+            # fresh claim attempt and the reaper's next wake cycle.
+            if time.time() - existing["last_heartbeat"] <= SESSION_TIMEOUT_S:
+                raise HTTPException(
+                    status_code=423,
+                    detail="Robot is currently in use by another operator. Try again later.",
+                )
+
+        token = str(uuid.uuid4())
+        now   = time.time()
+        _sessions[clean_id] = {"token": token, "claimed_at": now, "last_heartbeat": now}
+
+    print(f"[session] {clean_id!r} claimed — token [{token[:8]}…]")
+    return {"token": token}
+
+
+@app.post("/api/robot/{robot_id}/heartbeat")
+async def robot_heartbeat(robot_id: str, x_session_token: Optional[str] = Header(default=None)):
+    """
+    Refresh the session TTL.  Call every ~5 s while connected.
+
+    The ROS-side heartbeat (published via roslib to /{ns}/session/heartbeat)
+    is what actually keeps the RobotController open to commands; this endpoint
+    just keeps the FastAPI session table consistent so no one else can claim.
+    """
+    clean_id = robot_id.strip().upper()
+    session  = _sessions.get(clean_id)
+
+    if session is None:
+        raise HTTPException(status_code=404, detail="No active session for this robot")
+
+    if session["token"] != x_session_token:
+        raise HTTPException(status_code=403, detail="Invalid session token")
+
+    session["last_heartbeat"] = time.time()
+    return {"status": "ok"}
+
+
+@app.post("/api/robot/{robot_id}/pose")
+async def update_robot_pose(robot_id: str, payload: PoseUpdate):
+    clean_id = robot_id.strip().upper()
+    if clean_id not in ROBOT_DATABASE:
+        raise HTTPException(status_code=404, detail="Robot ID not found")
+    ROBOT_DATABASE[clean_id]["x"] = payload.x
+    ROBOT_DATABASE[clean_id]["y"] = payload.y
+    return {"status": "updated", "x": payload.x, "y": payload.y}
+
+
+# ── HTML Frontend ──────────────────────────────────────────────────────────────
+
 html_content = """
 <!DOCTYPE html>
 <html>
@@ -79,6 +209,17 @@ html_content = """
             border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
         }
         .header button.connect-btn:hover { background: #0b5ed7; }
+        .header button.connect-btn:disabled { background: #495057; cursor: not-allowed; }
+
+        /* Disconnect button — always visible in header, disabled until connected */
+        .header button.disconnect-btn {
+            padding: 7px 16px; font-size: 0.92em;
+            background: #dc3545; color: white;
+            border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
+        }
+        .header button.disconnect-btn:hover:not(:disabled) { background: #b02a37; }
+        .header button.disconnect-btn:disabled { background: #495057; cursor: not-allowed; }
+
         .db-pill {
             display: none; background: #2c3040; border: 1px solid #444;
             border-radius: 6px; padding: 4px 10px; font-size: 0.8em; color: #adb5bd;
@@ -107,6 +248,16 @@ html_content = """
         .badge.warning      { background: #fff3cd; color: #664d03; }
         .badge::before { content: "●"; font-size: 0.9em; }
         .ping-label { font-size: 0.8em; color: #6c757d; margin-left: 4px; }
+
+        /* ── Session pill in status strip ─────────────────── */
+        .session-pill {
+            display: inline-flex; align-items: center; gap: 5px;
+            padding: 4px 10px; border-radius: 20px;
+            font-size: 0.8em; font-weight: 600; font-family: monospace;
+        }
+        .session-pill.free     { background: #d1e7dd; color: #0a3622; }
+        .session-pill.occupied { background: #cff4fc; color: #055160; }
+        .session-pill.mine     { background: #e0cffc; color: #3d0a91; }
 
         /* ── Card ─────────────────────────────────────────── */
         .card {
@@ -230,16 +381,6 @@ html_content = """
         .radar-closest { font-size: 0.82em; text-align: center; margin-top: 4px; }
         .radar-closest span { font-family: monospace; font-weight: 700; color: #dc3545; }
 
-        /* ── Chatter ──────────────────────────────────────── */
-        .chatter-btn {
-            width: 100%; padding: 8px 14px; font-size: 0.88em;
-            background: #0d6efd; color: white;
-            border: none; border-radius: 6px; cursor: pointer; font-weight: 600;
-        }
-        .chatter-btn:hover { background: #0b5ed7; }
-        .chatter-btn:disabled { background: #ced4da; color: #adb5bd; cursor: not-allowed; }
-        .action-log { font-size: 0.78em; color: #6c757d; font-style: italic; margin-top: 8px; min-height: 2.5em; }
-
         /* ── Responsive ───────────────────────────────────── */
         @media (max-width: 750px) {
             .main-grid   { grid-template-columns: 1fr; }
@@ -256,9 +397,10 @@ html_content = """
     <div class="header">
         <h1>Fleet Dashboard</h1>
         <input type="text" id="robot-id-input" placeholder="Robot ID (e.g. ROB-100)">
-        <button class="connect-btn" onclick="fetchRobotAndConnect()">Initialize &amp; Connect</button>
+        <button class="connect-btn" id="connect-btn" onclick="fetchRobotAndConnect()">Initialize &amp; Connect</button>
+        <button class="disconnect-btn" id="disconnect-btn" disabled onclick="userInitiatedDisconnect()">Disconnect</button>
         <div id="backend-info-display" class="db-pill">
-            <strong id="db-namespace">—</strong> &nbsp;·&nbsp; spawn <span id="db-coords">—</span>
+            <strong id="db-namespace">—</strong> &nbsp;·&nbsp; <span id="db-coords">—</span>
         </div>
     </div>
 
@@ -268,6 +410,8 @@ html_content = """
         <span id="status" class="badge disconnected">Offline</span>
         <span class="ping-label">Ping:</span>
         <span id="latency-display" class="badge warning">Waiting...</span>
+        <span class="ping-label">Session:</span>
+        <span id="session-status" class="session-pill free">FREE</span>
         <span class="ping-label">Collision:</span>
         <span id="collision-status" class="badge warning">---</span>
     </div>
@@ -338,7 +482,6 @@ html_content = """
                                 ontouchstart="event.preventDefault();dpadStart(-getLinSpeed(),0)" ontouchend="dpadStop()">&#9660;</button>
                             <div class="dpad-btn dpad-empty"></div>
                         </div>
-                        <div class="ctrl-label">D-Pad</div>
                     </div>
                     <div>
                         <div class="ctrl-label" style="text-align:left; margin-bottom:5px;">/cmd_vel</div>
@@ -397,18 +540,12 @@ html_content = """
             <div class="radar-closest">Closest: <span id="scan-closest">---</span></div>
         </div>
 
-        <div class="card">
-            <div class="card-title">Test Comms</div>
-            <button id="pub-button" class="chatter-btn" onclick="publishMessage()" disabled>Send /chatter Message</button>
-            <div id="action-log" class="action-log">Connect to a robot first...</div>
-        </div>
-
     </div><script>
         // ── State ─────────────────────────────────────────────────────────────
         let ros             = null;
+        let secureWS = null;
         let odomTopic       = null;
         let poseTopic       = null;
-        let chatterTopic    = null;
         let cmdVelTopic     = null;
         let imuTopic        = null;
         let cameraInfoTopic = null;
@@ -417,10 +554,20 @@ html_content = """
         let pingTopic             = null;
         let collisionStatusTopic  = null;
         let scanClosestTopic      = null;
+        let sessionStatusTopic    = null;  // subscribes to /{ns}/session/status
+        let sessionHeartbeatTopic = null;  // publishes to /{ns}/session/heartbeat
 
         let pingInterval     = null;
         let watchdogInterval = null;
         let poseSaveInterval = null;
+
+        // ── Session state ─────────────────────────────────────────────────────
+        // sessionToken   – UUID4 issued by FastAPI on claim; null when disconnected.
+        // apiHbInterval  – setInterval handle for the FastAPI heartbeat POST.
+        // rosHbInterval  – setInterval handle for the ROS topic heartbeat publish.
+        let sessionToken    = null;
+        let apiHbInterval   = null;
+        let rosHbInterval   = null;
 
         // ── Frame-synced velocity state ───────────────────────────────────────
         let desiredLinear   = 0;
@@ -428,7 +575,6 @@ html_content = """
 
         let lastTelemetryTime = 0;
         let lastPoseSave      = 0;
-        let counter           = 1;
         let radarDirty        = false;
         let latestScan        = null;
         let lastPoseData      = null;
@@ -437,12 +583,20 @@ html_content = """
         let joystickActive    = false;
         let activeKeys        = new Set();
 
-        const robot_ip   = window.location.hostname;
-        const statusSpan = document.getElementById("status");
+        const robot_ip    = window.location.hostname;
+        const statusSpan  = document.getElementById("status");
         const latencySpan = document.getElementById("latency-display");
         function safeSet(id, val) {
             const el = document.getElementById(id);
             if (el) el.innerText = val;
+        }
+
+        // ── Session pill helper ───────────────────────────────────────────────
+        function setSessionPill(text, cls) {
+            const el = document.getElementById("session-status");
+            if (!el) return;
+            el.innerText  = text;
+            el.className  = "session-pill " + cls;
         }
 
         // ── Speed Helpers ─────────────────────────────────────────────────────
@@ -459,12 +613,10 @@ html_content = """
         function setDesiredVel(linear, angular) {
             desiredLinear  = linear;
             desiredAngular = angular;
-            // Keep the readout snappy — update UI immediately without waiting for frame
             document.getElementById("cmdvel-linear").innerText  = linear.toFixed(2);
             document.getElementById("cmdvel-angular").innerText = angular.toFixed(2);
         }
 
-        // Emergency stop is the one exception: publishes immediately regardless of frame clock.
         function emergencyStop() {
             activeKeys.clear();
             setDesiredVel(0, 0);
@@ -487,6 +639,7 @@ html_content = """
 
         // ── WASD Keyboard ─────────────────────────────────────────────────────
         function sendKeyVel() {
+            if (statusSpan.className !== "status connected") return;
             const lin = getLinSpeed(), ang = getAngSpeed();
             let lx = 0, az = 0;
             if (activeKeys.has('w')) lx += lin;
@@ -507,7 +660,7 @@ html_content = """
 
         document.addEventListener('keyup', function(e) {
             activeKeys.delete(e.key.toLowerCase());
-            sendKeyVel();   // recalculates; zeros out automatically if no keys held
+            sendKeyVel();
         });
 
         // ── Virtual Joystick ──────────────────────────────────────────────────
@@ -529,7 +682,7 @@ html_content = """
             }
 
             function applyJoystick(e) {
-                if (!joystickActive) return;
+                if (!joystickActive || statusSpan.className !== "status connected") return;
                 e.preventDefault();
                 const { dx, dy } = clampedOffset(e);
                 knob.style.transform = `translate(calc(-50% + ${dx}px), calc(-50% + ${dy}px))`;
@@ -552,67 +705,170 @@ html_content = """
             document.addEventListener('touchend',  release);
         })();
 
-        // ── Core Flow: Fetch → Spawn or Connect ───────────────────────────────
+        // ── Session heartbeat helpers ─────────────────────────────────────────
+
+        /**
+         * Start sending keep-alive pulses on two channels:
+         *   1. ROS topic  /{ns}/session/heartbeat  (read by RobotController)
+         *   2. FastAPI    POST /api/robot/{id}/heartbeat  (keeps the claim alive)
+         *
+         * The ROS pulse is every 3 s (well inside the 15 s timeout).
+         * The API pulse is every 5 s.
+         *
+         * If the API heartbeat returns 403 or 404 it means another client has
+         * claimed the robot (our token was overwritten) or the server restarted
+         * and lost our session.  Either way we no longer hold the session, so we
+         * stop all heartbeats, disable controls, and surface a clear message
+         * rather than continuing to publish ROS commands under an orphaned token.
+         */
+        function startHeartbeats(ns, robotId, token) {
+            stopHeartbeats(); // clear any previous
+
+            rosHbInterval = setInterval(function() {
+                if (sessionHeartbeatTopic && ros && ros.isConnected) {
+                    sessionHeartbeatTopic.publish(new ROSLIB.Message({ data: token }));
+                }
+            }, 3000);
+            // Inside startHeartbeats(token, robotId)
+            apiHbInterval = setInterval(function() {
+                fetch('/api/robot/' + robotId + '/heartbeat', {
+                    method:  'POST',
+                    headers: { 'X-Session-Token': token }
+                }).then(function(resp) {
+                    if (resp.status === 403 || resp.status === 404) {
+                        // Terminate local timers and close the connection
+                        stopHeartbeats();
+                        disconnectCurrentRobot(); // This triggers ros.close() and vid.src=""
+                        
+                        sessionToken = null;
+                        setSessionPill("LOST", "free");
+                        alert("Session revoked by server. Data stream terminated.");
+                    }
+                });
+            }, 5000);
+        }
+
+        function stopHeartbeats() {
+            if (rosHbInterval) { clearInterval(rosHbInterval); rosHbInterval = null; }
+            if (apiHbInterval) { clearInterval(apiHbInterval); apiHbInterval = null; }
+        }
+
         async function fetchRobotAndConnect() {
             const robotId     = document.getElementById("robot-id-input").value.trim();
             const infoDisplay = document.getElementById("backend-info-display");
             if (!robotId) return alert("Please enter a Robot ID (e.g., ROB-100)");
 
+            // FIX: If we are already connected to a robot, handle it before starting a new connection.
+            if (sessionToken) {
+                // Prevent doing anything if they just clicked connect on the same robot
+                if (robotId.toUpperCase() === currentRobotId.toUpperCase()) {
+                    return alert("You are already connected to " + currentRobotId + ".");
+                }
+                
+                // Cleanly release the current session and tear down background topics
+                console.log("Auto-disconnecting from previous robot...");
+                await userInitiatedDisconnect();
+            }
+
+            // Disable both buttons while the async handshake is in flight so the
+            // user cannot double-click or start a second connection attempt.
+            document.getElementById("connect-btn").disabled     = true;
+            document.getElementById("disconnect-btn").disabled  = true;
+
             try {
-                const response = await fetch('/api/robot/' + robotId);
-                if (!response.ok) throw new Error("Robot ID not found in the backend database.");
-
-                const data = await response.json();
+                // ── 1. Fetch robot info ───────────────────────────────────────
+                const infoResp = await fetch('/api/robot/' + robotId);
+                if (!infoResp.ok) throw new Error("Robot ID not found in the backend database.");
+                const data            = await infoResp.json();
                 const targetNamespace = data.namespace;
-                currentRobotId = robotId;
+                currentRobotId        = robotId;
 
-                // Default to origin if no prior position data exists
                 const spawnX = (data.x != null) ? data.x : 0.0;
                 const spawnY = (data.y != null) ? data.y : 0.0;
 
                 infoDisplay.style.display = "block";
                 document.getElementById("db-namespace").innerText = targetNamespace;
-                document.getElementById("db-coords").innerText    = "x: " + spawnX.toFixed(2) + ", y: " + spawnY.toFixed(2);
+                document.getElementById("db-coords").innerText    =
+                    "x: " + spawnX.toFixed(2) + ", y: " + spawnY.toFixed(2);
 
+                // ── 2. Claim exclusive session ────────────────────────────────
+                // This must succeed before we attempt a rosbridge connection.
+                // A 423 means someone else is already driving; we surface a
+                // clear error rather than silently connecting as a read-only view.
+                const claimResp = await fetch('/api/robot/' + robotId + '/claim', { method: 'POST' });
+
+                if (claimResp.status === 423) {
+                    const err = await claimResp.json();
+                    throw new Error(err.detail || "Robot is in use by another operator.");
+                }
+                if (!claimResp.ok) {
+                    throw new Error("Failed to claim robot session (HTTP " + claimResp.status + ")");
+                }
+
+                const claimData = await claimResp.json();
+                sessionToken = claimData.token;
+                setSessionPill("MINE · " + sessionToken.slice(0, 8), "mine");
+
+                // ── 3. Connect rosbridge ──────────────────────────────────────
                 if (!ros || !ros.isConnected) {
                     if (ros) { try { ros.close(); } catch(e) {} }
                     ros = new ROSLIB.Ros({ url: 'ws://' + robot_ip + ':9090' });
                     await new Promise((resolve, reject) => {
-                        const onConn  = () => { ros.off('error', onErr); resolve(); };
-                        const onErr   = () => { ros.off('connection', onConn); reject(new Error("ROSBridge connection failed. Is it running on port 9090?")); };
+                        const onConn = () => { ros.off('error', onErr); resolve(); };
+                        const onErr  = () => { ros.off('connection', onConn); reject(new Error("ROSBridge connection failed. Is it running on port 9090?")); };
                         ros.on('connection', onConn);
                         ros.on('error',      onErr);
                     });
                 }
 
-                ros.getTopics(function(topicList) {
-                    const expectedTopic = '/' + targetNamespace + '/odom';
-                    if (topicList.topics.includes(expectedTopic)) {
-                        document.getElementById("action-log").innerHTML =
-                            "Robot already in simulation. Connecting to existing instance...";
-                        connectToIsolatedRobot(targetNamespace);
-                    } else {
-                        document.getElementById("action-log").innerHTML =
-                            "Robot not found. Spawning at (" + spawnX.toFixed(2) + ", " + spawnY.toFixed(2) + ")...";
-                        var spawnTopic = new ROSLIB.Topic({ ros, name: '/spawn_signal_topic', messageType: 'std_msgs/msg/String' });
-                        spawnTopic.publish(new ROSLIB.Message({ data: targetNamespace + "," + spawnX + "," + spawnY }));
-                        setTimeout(() => connectToIsolatedRobot(targetNamespace), 3000);
-                    }
+                // ── 4. Initialise or connect topics ───────────────────────────
+                // Yield one event-loop tick after the rosbridge connection event
+                // before calling getTopics.  The session claim step above added
+                // async/await to this function, which means the connection promise
+                // resolves and execution continues synchronously — rosbridge has
+                // opened the WebSocket but has not yet finished its internal
+                // handshake, so a publish fired immediately would be dropped.
+                // A zero-length setTimeout defers to the next tick and is enough.
+                await new Promise(resolve => setTimeout(resolve, 0));
+
+                const spawnTopic = new ROSLIB.Topic({
+                    ros,
+                    name: '/spawn_signal_topic',
+                    messageType: 'std_msgs/msg/String'
                 });
+
+                spawnTopic.publish(new ROSLIB.Message({
+                    data: `${targetNamespace},${spawnX},${spawnY}`
+                }));
+
+                // Give Gazebo a few seconds to spawn and the ros_gz_bridge
+                // + RobotController to come up, then start the live connection.
+                setTimeout(() => connectToIsolatedRobot(targetNamespace), 4000);
 
             } catch (err) {
                 alert(err.message);
                 infoDisplay.style.display = "none";
-                disconnectCurrentRobot();
+
+                // If we managed to claim before the error, release it now.
+                if (sessionToken) {
+                    await releaseSession(robotId, sessionToken);
+                    sessionToken = null;
+                }
+                setSessionPill("FREE", "free");
+                document.getElementById("connect-btn").disabled    = false;
+                document.getElementById("disconnect-btn").disabled = true;
             }
         }
 
         // ── Connect ───────────────────────────────────────────────────────────
         function connectToIsolatedRobot(namespace) {
-            disconnectCurrentRobot();
+            // Do NOT call the full disconnectCurrentRobot() here — that would
+            // release the session we just claimed.  Just tear down old topics.
+            _teardownTopicsOnly();
             currentNamespace = namespace;
 
-            document.getElementById("active-namespace-display").innerText = "Listening to: /" + namespace;
+            document.getElementById("active-namespace-display").innerText =
+                "Controlling: /" + namespace;
             document.getElementById("cam-topic-label").innerText =
                 "Topic: /" + namespace + "/camera/image_raw (MJPEG via web_video_server)";
 
@@ -624,14 +880,19 @@ html_content = """
             setupNamespacedTopics();
             startWatchdog();
 
-            // Flush latest pose to backend every 5 s
+            // Start dual-channel heartbeats after a short delay so the first
+            // API heartbeat check doesn't race against the claim acknowledgment.
+            // setInterval never fires immediately, so the first ROS pulse shifts
+            // from ~3 s to ~4 s — well within the 15 s SESSION_TIMEOUT_S.
+            setTimeout(() => startHeartbeats(namespace, currentRobotId, sessionToken), 1000);
+
             if (poseSaveInterval) clearInterval(poseSaveInterval);
             poseSaveInterval = setInterval(function() {
                 if (currentRobotId && lastPoseData) {
                     fetch('/api/robot/' + currentRobotId + '/pose', {
-                        method: 'POST',
+                        method:  'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(lastPoseData)
+                        body:    JSON.stringify(lastPoseData)
                     }).catch(err => console.warn("Pose save failed:", err));
                 }
             }, 5000);
@@ -643,231 +904,223 @@ html_content = """
             ros.on('close', function() {
                 statusSpan.innerHTML = "Bridge Closed";
                 statusSpan.className = "status disconnected";
-                document.getElementById("pub-button").disabled = true;
                 setControlsEnabled(false);
+                stopHeartbeats();
             });
+
+            // Re-enable connect and enable disconnect once we're live.
+            document.getElementById("connect-btn").disabled    = false;
+            document.getElementById("disconnect-btn").disabled = false;
         }
 
-        // ── Topic Setup ───────────────────────────────────────────────────────
+        // ── User-initiated disconnect ──────────────────────────────────────────
+        /**
+         * Releases the session and tears down the client — WITHOUT despawning
+         * the robot.  The Gazebo simulation and the ROS node keep running.
+         * Another operator can claim and drive the robot immediately after.
+         */
+        async function userInitiatedDisconnect() {
+            document.getElementById("connect-btn").disabled    = true;
+            document.getElementById("disconnect-btn").disabled = true;
+
+            // Release the FastAPI session first so the robot becomes claimable
+            // the moment we stop publishing ROS heartbeats.
+            if (sessionToken && currentRobotId) {
+                await releaseSession(currentRobotId, sessionToken);
+            }
+            sessionToken = null;
+            setSessionPill("FREE", "free");
+
+            disconnectCurrentRobot();
+
+            document.getElementById("connect-btn").disabled    = false;
+            // disconnect-btn stays disabled until the next successful claim.
+        }
+
+        /**
+         * Call the FastAPI release endpoint.  Fire-and-forget on failure —
+         * the server-side session reaper will clean up within SESSION_TIMEOUT_S.
+         */
+        async function releaseSession(robotId, token) {
+            try {
+                await fetch('/api/robot/' + robotId + '/claim', {
+                    method:  'DELETE',
+                    headers: { 'X-Session-Token': token }
+                });
+            } catch (e) {
+                console.warn("Session release failed (server will auto-expire):", e);
+            }
+        }
+
         function setupNamespacedTopics() {
             const ns = currentNamespace;
 
+            /**
+            * Updates the watchdog timer to keep the dashboard in "Connected" status.
+            */
             function markOnline() {
                 lastTelemetryTime = Date.now();
                 if (statusSpan.className !== "status connected") {
                     statusSpan.innerHTML = "Target Online & Connected!";
                     statusSpan.className = "status connected";
-                    document.getElementById("pub-button").disabled = false;
                     setControlsEnabled(true);
-                    document.getElementById("action-log").innerHTML = "Ready to send targeted messages.";
                 }
             }
 
-            // /odom
-            odomTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/odom', messageType: 'nav_msgs/msg/Odometry', throttle_rate: 100, queue_length: 1 });
-            odomTopic.subscribe(function(msg) {
-                markOnline();
-                if (msg.pose && msg.pose.pose && msg.pose.pose.position) {
-                    document.getElementById("odom-x").innerText = msg.pose.pose.position.x.toFixed(2);
-                    document.getElementById("odom-y").innerText = msg.pose.pose.position.y.toFixed(2);
-                }
+            // 1. Setup Secure Control & Heartbeat Channels
+            // These remain on ROSLIB because they are gated by the token in the C++ node.
+            cmdVelTopic = new ROSLIB.Topic({
+                ros, 
+                name: '/' + ns + '/cmd_vel_web',
+                messageType: 'web_ros_custom_msgs/msg/AuthorizedTwist'
             });
 
-            // /model/pose
-            poseTopic = new ROSLIB.Topic({ ros, name: '/model/' + ns + '/pose', messageType: 'geometry_msgs/msg/Pose', throttle_rate: 200, queue_length: 1 });
-            poseTopic.subscribe(function(msg) {
-                markOnline();
-                if (msg.position) {
-                    const x = msg.position.x, y = msg.position.y;
-                    document.getElementById("pose-x").innerText = x.toFixed(2);
-                    document.getElementById("pose-y").innerText = y.toFixed(2);
-                    lastPoseData = { x, y };
-                }
-            });
-
-            // /cmd_vel  — publisher only
-            cmdVelTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/cmd_vel_web', messageType: 'geometry_msgs/msg/Twist' });
-
-            // 1. Route the video stream natively via web_video_server (Port 8080)
-            const videoStream      = document.getElementById('video-stream');
-            const camPlaceholder   = document.getElementById('cam-placeholder');
-            
-            const streamUrl = 'http://' + robot_ip + ':8080/stream?topic=/' + ns + '/camera/image_raw';
-            videoStream.src = streamUrl;
-            
-            videoStream.onload = function() {
-                videoStream.style.display = 'block';
-                camPlaceholder.style.display = 'none';
-            };
-            
-            videoStream.onerror = function() {
-                camPlaceholder.innerText = "Error loading MJPEG stream. Is web_video_server running on port 8080?";
-                camPlaceholder.style.display = 'flex';
-                videoStream.style.display = 'none';
-            };
-
-            // 2. Independent /cmd_vel publishing loop (~15 Hz)
-            if (window.controlInterval) clearInterval(window.controlInterval);
-            
-            window.controlInterval = setInterval(function() {
-                if (cmdVelTopic && (desiredLinear !== 0 || desiredAngular !== 0 || activeKeys.size > 0 || joystickActive)) {
-                    cmdVelTopic.publish(new ROSLIB.Message({
-                        linear:  { x: desiredLinear,  y: 0, z: 0 },
-                        angular: { x: 0, y: 0, z: desiredAngular }
-                    }));
-                }
-            }, 66); // 66ms = ~15 Hz
-
-            // /imu
-            imuTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/imu', messageType: 'sensor_msgs/msg/Imu', throttle_rate: 100, queue_length: 1 });
-            imuTopic.subscribe(function(msg) {
-                if (msg.linear_acceleration) {
-                    safeSet("imu-ax", msg.linear_acceleration.x.toFixed(3));
-                    safeSet("imu-ay", msg.linear_acceleration.y.toFixed(3));
-                    safeSet("imu-az", msg.linear_acceleration.z.toFixed(3));
-                }
-                if (msg.angular_velocity) {
-                    safeSet("imu-gx", msg.angular_velocity.x.toFixed(3));
-                    safeSet("imu-gy", msg.angular_velocity.y.toFixed(3));
-                    safeSet("imu-gz", msg.angular_velocity.z.toFixed(3));
-                }
-            });
-
-            // /camera/camera_info
-            cameraInfoTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/camera/camera_info', messageType: 'sensor_msgs/msg/CameraInfo', throttle_rate: 1000, queue_length: 1 });
-            cameraInfoTopic.subscribe(function(msg) {
-                safeSet("cam-res",  msg.width + " x " + msg.height);
-                safeSet("cam-dist", msg.distortion_model || "---");
-                if (msg.k && msg.k.length >= 6) {
-                    safeSet("cam-fx", msg.k[0].toFixed(2));
-                    safeSet("cam-fy", msg.k[4].toFixed(2));
-                    safeSet("cam-cx", msg.k[2].toFixed(2));
-                    safeSet("cam-cy", msg.k[5].toFixed(2));
-                }
-            });
-
-            // /scan
-            scanTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/scan', messageType: 'sensor_msgs/msg/LaserScan', throttle_rate: 100, queue_length: 1 });
-            scanTopic.subscribe(function(msg) {
-                latestScan = msg;
-                if (!radarDirty) {
-                    radarDirty = true;
-                    requestAnimationFrame(drawRadar);
-                }
-                // Closest-obstacle calculation has been moved to RobotController.
-                // scan-closest is updated via the /scan_closest topic below.
-                const ranges = msg.ranges || [];
-                const deg = ((msg.angle_max - msg.angle_min) * 180 / Math.PI).toFixed(1);
-                safeSet("scan-count",    ranges.length);
-                safeSet("scan-rmin",     msg.range_min.toFixed(2) + " m");
-                safeSet("scan-rmax",     msg.range_max.toFixed(2) + " m");
-                safeSet("scan-coverage", deg + " deg");
-            });
-
-        function drawRadar() {
-            radarDirty = false;
-            const msg = latestScan;
-            if (!msg) return;
-
-            const canvas = document.getElementById("radar-canvas");
-            if (!canvas) return;
-            const ctx = canvas.getContext("2d");
-            const W = canvas.width, H = canvas.height;
-            const cx = W / 2, cy = H / 2;
-            const R  = Math.min(W, H) / 2 - 8;
-
-            ctx.fillStyle = "#0d1117";
-            ctx.fillRect(0, 0, W, H);
-
-            ctx.strokeStyle = "#1f3d1f";
-            ctx.lineWidth = 1;
-            for (let i = 1; i <= 4; i++) {
-                ctx.beginPath();
-                ctx.arc(cx, cy, R * i / 4, 0, 2 * Math.PI);
-                ctx.stroke();
-            }
-            ctx.beginPath(); ctx.moveTo(cx - R, cy); ctx.lineTo(cx + R, cy); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R); ctx.stroke();
-
-            const ranges = msg.ranges || [];
-            const scale = R / msg.range_max;
-            let validCount = 0;
-            for (let i = 0; i < ranges.length; i++) {
-                const r = ranges[i];
-                if (!isFinite(r) || r < msg.range_min || r > msg.range_max) continue;
-                validCount++;
-                const angle = msg.angle_min + i * msg.angle_increment;
-                const px = cx + Math.sin(angle) * r * scale;
-                const py = cy - Math.cos(angle) * r * scale;
-                const ratio = r / msg.range_max;
-                const red   = Math.floor(255 * (1 - ratio));
-                const green = Math.floor(180 * ratio + 60);
-                ctx.fillStyle = "rgb(" + red + "," + green + ",40)";
-                ctx.fillRect(px - 1, py - 1, 3, 3);
-            }
-
-            ctx.fillStyle = "#00ff88";
-            ctx.beginPath();
-            ctx.arc(cx, cy, 4, 0, 2 * Math.PI);
-            ctx.fill();
-
-            const legend = document.getElementById("radar-legend");
-            if (legend) legend.innerText = validCount + " pts · " + msg.range_max.toFixed(1) + " m range";
-        }
-
-            // /scan_closest — Float32 published by RobotController; drives the "Closest" readout
-            scanClosestTopic = new ROSLIB.Topic({
-                ros, name: '/' + ns + '/scan_closest',
-                messageType: 'std_msgs/msg/Float32',
-                throttle_rate: 100, queue_length: 1
-            });
-            scanClosestTopic.subscribe(function(msg) {
-                safeSet("scan-closest", msg.data >= 0 ? msg.data.toFixed(2) + " m" : "---");
-            });
-
-            // /collision_status — String published by RobotController ("OK" or "BLOCKED: …")
-            collisionStatusTopic = new ROSLIB.Topic({
-                ros, name: '/' + ns + '/collision_status',
+            sessionHeartbeatTopic = new ROSLIB.Topic({
+                ros, 
+                name: '/' + ns + '/session/heartbeat',
                 messageType: 'std_msgs/msg/String'
             });
-            collisionStatusTopic.subscribe(function(msg) {
-                const el = document.getElementById("collision-status");
-                if (!el) return;
-                if (msg.data === "OK") {
-                    el.innerText  = "Path Clear";
-                    el.className  = "badge connected";
-                } else {
-                    el.innerText  = "⚠ " + msg.data;
-                    el.className  = "badge disconnected";
+
+            pingTopic = new ROSLIB.Topic({
+                ros, 
+                name: '/' + ns + '/ping', 
+                messageType: 'std_msgs/msg/String'
+            });
+
+            // 2. Setup Gated Video Proxy
+            const videoStream = document.getElementById('video-stream');
+            const camPlaceholder = document.getElementById('cam-placeholder');
+
+            if (videoStream) {
+                // Point to the FastAPI Proxy instead of the public port 8080
+                videoStream.src = `/api/robot/${currentRobotId}/stream?token=${sessionToken}`;
+                videoStream.style.display = 'block';
+            }
+            if (camPlaceholder) camPlaceholder.style.display = 'none';
+
+            // 3. Open a Secure WebSocket to the FastAPI Bouncer
+            if (secureWS) {
+                secureWS.close(); // Close existing connection before opening a new one
+            }
+            
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            secureWS = new WebSocket(`${protocol}//${window.location.host}/api/robot/${currentRobotId}/ws?token=${sessionToken}`);
+
+            secureWS.onmessage = function(event) {
+                const data = JSON.parse(event.data);
+                
+                // CRITICAL: Update the watchdog so the dashboard doesn't time out
+                markOnline();
+
+                // Telemetry updates
+                if (data.type === "odom") {
+                    safeSet("odom-x", data.x.toFixed(2));
+                    safeSet("odom-y", data.y.toFixed(2));
+                } else if (data.type === "pose") {
+                    safeSet("pose-x", data.wx.toFixed(2));
+                    safeSet("pose-y", data.wy.toFixed(2));
+                } else if (data.type === "imu") {
+                    safeSet("imu-ax", data.ax.toFixed(2));
+                    safeSet("imu-ay", data.ay.toFixed(2));
+                    safeSet("imu-az", data.az.toFixed(2));
+                    safeSet("imu-gx", (data.gx * 57.29).toFixed(1));
+                    safeSet("imu-gy", (data.gy * 57.29).toFixed(1));
+                    safeSet("imu-gz", (data.gz * 57.29).toFixed(1));
+                } else if (data.type === "scan") {
+                    latestScan = data;
+                    drawRadar(); // Trigger the canvas update
+                    const minRange = Math.min(...data.ranges.filter(r => r > data.range_min));
+                    safeSet("scan-closest", minRange.toFixed(2) + " m");
+                } else if (data.type === "collision") {
+                    const el = document.getElementById("collision-status");
+                    if (el) {
+                        el.innerText = data.status === "OK" ? "Path Clear" : "⚠ " + data.status;
+                        el.className = data.status === "OK" ? "badge connected" : "badge disconnected";
+                    }
                 }
-            });
+            };
 
-            // /scan/points
-            scanPointsTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/scan/points', messageType: 'sensor_msgs/msg/PointCloud2', throttle_rate: 200, queue_length: 1 });
-            scanPointsTopic.subscribe(function(msg) {
-                const fields = (msg.fields || []).map(f => f.name).join(", ");
-                safeSet("pts-count",  (msg.width || 0) * (msg.height || 0));
-                safeSet("pts-fields", fields || "---");
-                safeSet("pts-width",  msg.width  || "---");
-                safeSet("pts-height", msg.height || "---");
-            });
-
-            // /chatter
-            chatterTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/chatter', messageType: 'std_msgs/msg/String' });
-
-            // /web_ping
-            pingTopic = new ROSLIB.Topic({ ros, name: '/' + ns + '/web_ping', messageType: 'std_msgs/msg/String' });
-            pingTopic.subscribe(function(msg) {
-                const lat = (Date.now() - parseInt(msg.data)) / 2;
-                if (!isNaN(lat)) {
-                    latencySpan.innerHTML = "<span class='metric'>" + lat.toFixed(0) + " ms</span>";
-                    latencySpan.className = lat < 50 ? "status connected" : lat < 150 ? "status warning" : "status disconnected";
+            secureWS.onclose = function(e) {
+                if (e.code === 4003) {
+                    alert("Session Revoked: Connection physically severed by server.");
+                    disconnectCurrentRobot();
                 }
-            });
+            };
+
+            // 4. Command Velocity Control Loop (~15 Hz)
+            if (window.controlInterval) clearInterval(window.controlInterval);
+            window.controlInterval = setInterval(function() {
+                if (cmdVelTopic && sessionToken && (desiredLinear !== 0 || desiredAngular !== 0)) {
+                    cmdVelTopic.publish(new ROSLIB.Message({
+                        token: sessionToken,
+                        command: {
+                            linear:  { x: desiredLinear,  y: 0, z: 0 },
+                            angular: { x: 0, y: 0, z: desiredAngular }
+                        }
+                    }));
+                }
+            }, 66);
+
+            /**
+            * Draws the LIDAR Radar visualization on the canvas.
+            */
+            function drawRadar() {
+                const msg = latestScan;
+                if (!msg) return;
+                const canvas = document.getElementById("radar-canvas");
+                if (!canvas) return;
+                const ctx = canvas.getContext("2d");
+                const W = canvas.width, H = canvas.height;
+                const cx = W / 2, cy = H / 2;
+                const R  = Math.min(W, H) / 2 - 8;
+
+                ctx.fillStyle = "#0d1117";
+                ctx.fillRect(0, 0, W, H);
+                ctx.strokeStyle = "#1f3d1f"; ctx.lineWidth = 1;
+                
+                for (let i = 1; i <= 4; i++) {
+                    ctx.beginPath(); ctx.arc(cx, cy, R * i / 4, 0, 2 * Math.PI); ctx.stroke();
+                }
+                
+                const ranges = msg.ranges || [];
+                const scale  = R / msg.range_max;
+                let validCount = 0;
+                
+                for (let i = 0; i < ranges.length; i++) {
+                    const r = ranges[i];
+                    if (!isFinite(r) || r < msg.range_min || r > msg.range_max) continue;
+                    validCount++;
+                    const angle = msg.angle_min + i * msg.angle_increment;
+                    const px = cx + Math.sin(angle) * r * scale;
+                    const py = cy - Math.cos(angle) * r * scale;
+                    
+                    const ratio = r / msg.range_max;
+                    ctx.fillStyle = "rgb(" + Math.floor(255 * (1 - ratio)) + "," + Math.floor(180 * ratio + 60) + ",40)";
+                    ctx.fillRect(px - 1, py - 1, 3, 3);
+                }
+                
+                ctx.fillStyle = "#00ff88"; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill();
+                const legend = document.getElementById("radar-legend");
+                if (legend) legend.innerText = validCount + " pts · " + msg.range_max.toFixed(1) + " m range";
+            }
+
+            // 5. Setup Latency Tracking
+            if (pingInterval) clearInterval(pingInterval);
             pingInterval = setInterval(function() {
-                if (ros && ros.isConnected)
-                    pingTopic.publish(new ROSLIB.Message({ data: Date.now().toString() }));
+                if (ros && ros.isConnected && pingTopic) {
+                    const now = Date.now().toString();
+                    pingTopic.publish(new ROSLIB.Message({ data: now }));
+                }
             }, 1000);
+
+            // Add a subscriber to calculate the round-trip latency
+            pingTopic.subscribe(function(msg) {
+                const sentTime = parseInt(msg.data);
+                const latency = Date.now() - sentTime;
+                const latSpan = document.getElementById("latency-display");
+                latSpan.innerText = latency + " ms";
+                latSpan.className = latency > 150 ? "badge warning" : "badge connected";
+            });
         }
 
         // ── Watchdog ──────────────────────────────────────────────────────────
@@ -876,9 +1129,8 @@ html_content = """
             lastTelemetryTime = Date.now();
             watchdogInterval = setInterval(function() {
                 if (Date.now() - lastTelemetryTime > 10000) {
-                    statusSpan.innerHTML = "Target Lost / Not Spawning";
+                    statusSpan.innerHTML = "Target Lost";
                     statusSpan.className = "status disconnected";
-                    document.getElementById("pub-button").disabled = true;
                     setControlsEnabled(false);
                     ["odom-x","odom-y","pose-x","pose-y"].forEach(id => safeSet(id, "---"));
                     latencySpan.innerHTML = "Waiting for ping...";
@@ -887,91 +1139,296 @@ html_content = """
             }, 1000);
         }
 
-        // ── Disconnect / Reset All ────────────────────────────────────────────
-        function disconnectCurrentRobot() {
-            emergencyStop();
+        // ── Internal: tear down topics without touching the session ────────────
+        /**
+         * Stops all intervals and unsubscribes all topics but does NOT release
+         * the session and does NOT close the rosbridge connection.
+         * Used when switching between robots or re-connecting to the same robot.
+         */
+        function _teardownTopicsOnly() {
+            stopHeartbeats();
+            
+            // Close the secure relay socket
+            if (secureWS) {
+                secureWS.close();
+                secureWS = null;
+            }
+
             if (watchdogInterval) { clearInterval(watchdogInterval); watchdogInterval = null; }
             if (pingInterval)     { clearInterval(pingInterval);     pingInterval     = null; }
             if (poseSaveInterval) { clearInterval(poseSaveInterval); poseSaveInterval = null; }
             if (window.controlInterval) { clearInterval(window.controlInterval); window.controlInterval = null; }
 
-            [odomTopic, poseTopic, imuTopic, cameraInfoTopic, scanTopic, scanPointsTopic, pingTopic, collisionStatusTopic, scanClosestTopic]
-                .forEach(t => { if (t) t.unsubscribe(); });
+            // Unsubscribe ROSLIB topics safely
+            const topics = [
+                odomTopic, poseTopic, imuTopic, cameraInfoTopic, scanTopic,
+                scanPointsTopic, pingTopic, collisionStatusTopic, scanClosestTopic,
+                sessionStatusTopic
+            ];
 
-            if (ros) { try { ros.close(); } catch(e) {} ros = null; }
+            topics.forEach(t => { 
+                if (t && typeof t.unsubscribe === 'function') {
+                    try { t.unsubscribe(); } catch(e) { console.warn("Topic cleanup error:", e); }
+                }
+            });
 
-            odomTopic = poseTopic = chatterTopic = cmdVelTopic = null;
+            odomTopic = poseTopic = cmdVelTopic = null;
             imuTopic  = cameraInfoTopic = scanTopic = scanPointsTopic = pingTopic = null;
-            collisionStatusTopic = scanClosestTopic = null;
-            lastTelemetryTime = 0;
-            lastPoseSave      = 0;
-            lastPoseData      = null;
-            radarDirty        = false;
-            latestScan        = null;
-
+            collisionStatusTopic = scanClosestTopic = sessionStatusTopic = null;
+            sessionHeartbeatTopic = null;
+            
             ["odom-x","odom-y","pose-x","pose-y"].forEach(id => safeSet(id, "---"));
-            ["imu-ax","imu-ay","imu-az","imu-gx","imu-gy","imu-gz"].forEach(id => safeSet(id, "---"));
-            ["cam-res","cam-dist","cam-fx","cam-fy","cam-cx","cam-cy"].forEach(id => safeSet(id, "---"));
-            ["scan-count","scan-rmin","scan-rmax","scan-closest","scan-coverage"].forEach(id => safeSet(id, "---"));
-            const collEl = document.getElementById("collision-status");
-            if (collEl) { collEl.innerText = "---"; collEl.className = "badge warning"; }
-            ["pts-count","pts-fields","pts-width","pts-height"].forEach(id => safeSet(id, "---"));
-            safeSet("cmdvel-linear",  "0.00");
-            safeSet("cmdvel-angular", "0.00");
+        }
 
-            document.getElementById("pub-button").disabled = true;
+        // ── Full disconnect (session + topics + bridge) ────────────────────────
+        /**
+         * Tears down everything: topics, heartbeats, and the rosbridge socket.
+         * Call this only after the session has already been released (or was never
+         * claimed) — e.g. on errors during connection, or from userInitiatedDisconnect().
+         */
+        function disconnectCurrentRobot() {
+            emergencyStop(); // Reset velocities first
+            _teardownTopicsOnly();
+
+            // Close the ROS bridge socket entirely
+            if (ros) { 
+                try { ros.close(); } catch(e) {} 
+                ros = null; 
+            }
+
+            // Reset UI text and labels
             setControlsEnabled(false);
             safeSet("active-namespace-display", "No Active Target");
             safeSet("cam-topic-label", "Topic: N/A");
 
+            // KILL THE CAMERA STREAM - Only declare "vid" once
             const vid = document.getElementById("video-stream");
             const camPlaceholder = document.getElementById("cam-placeholder");
+            
             if (vid) { 
-                vid.src = ""; 
+                vid.src = ""; // Stops the browser from downloading data
                 vid.style.display = 'none'; 
             }
-            if (camPlaceholder) {
-                camPlaceholder.style.display = 'flex';
-                camPlaceholder.innerText = "Awaiting robot connection...";
+            
+            if (camPlaceholder) { 
+                camPlaceholder.style.display = 'flex'; 
+                camPlaceholder.innerText = "Awaiting robot connection..."; 
             }
 
+            // Reset status badges
             latencySpan.innerHTML = "Waiting for connection...";
             latencySpan.className = "status warning";
+
+            currentNamespace = "";
         }
 
-        // ── Chatter Test ──────────────────────────────────────────────────────
-        function publishMessage() {
-            if (!ros || !chatterTopic) return;
-            var msg = new ROSLIB.Message({ data: "Command sent to /" + currentNamespace + "! Count: " + counter });
-            chatterTopic.publish(msg);
-            document.getElementById("action-log").innerHTML =
-                "Published to <strong>/" + currentNamespace + "/chatter</strong>: " + msg.data;
-            counter++;
-        }
+        // ── Page unload — best-effort session release ──────────────────────────
+        // sendBeacon is fire-and-forget and survives page close, but it always
+        // sends POST — so we target the dedicated /release endpoint, not DELETE
+        // /claim (which sendBeacon could never reach).
+        window.addEventListener('beforeunload', function() {
+            if (sessionToken && currentRobotId) {
+                navigator.sendBeacon('/api/robot/' + currentRobotId + '/release?token=' + encodeURIComponent(sessionToken));
+            }
+        });
     </script>
 </body>
 </html>
 """
 
+async def broadcast_to_operator(robot_id: str, data: dict):
+    """
+    The Bouncer: Only forwards data if the operator is still authorized.
+    """
+    ws = _active_ws.get(robot_id.upper())
+    if ws:
+        try:
+            # Thread-safe check: Is this WebSocket still the authorized one?
+            # If a new claim happened, the _active_ws entry would have been updated.
+            await ws.send_json(data)
+        except Exception:
+            _active_ws.pop(robot_id.upper(), None)
+
+def telemetry_callback(msg, robot_id, msg_type):
+    """
+    Bridge: ROS Binary -> JSON -> Secure WebSocket.
+    Acts as the secure relay point for all incoming robot data.
+    """
+    # Ensure the FastAPI event loop is available before attempting to relay
+    if not loop:
+        return
+    
+    # Initialize the base data packet with the robot's identity
+    data = {"type": msg_type, "robot_id": robot_id}
+    
+    # 1. Handle Odometry (Relative Position)
+    if msg_type == "odom":
+        data.update({
+            "x": round(msg.pose.pose.position.x, 3),
+            "y": round(msg.pose.pose.position.y, 3)
+        })
+        
+    # 2. Handle World Pose (Global Position from Gazebo)
+    elif msg_type == "pose":
+        data.update({
+            "wx": round(msg.position.x, 3),
+            "wy": round(msg.position.y, 3)
+        })
+        
+    # 3. Handle IMU (Inertial Measurement Unit)
+    elif msg_type == "imu":
+        data.update({
+            "ax": round(msg.linear_acceleration.x, 3),
+            "ay": round(msg.linear_acceleration.y, 3),
+            "az": round(msg.linear_acceleration.z, 3),
+            "gx": round(msg.angular_velocity.x, 3),
+            "gy": round(msg.angular_velocity.y, 3),
+            "gz": round(msg.angular_velocity.z, 3) # Yaw rate
+        })
+        
+    # 4. Handle LaserScan (LIDAR Radar)
+    elif msg_type == "scan":
+        # CRITICAL FIX: Convert array.array to a standard Python list
+        # We also replace Infinity/NaN with 0.0 to ensure JSON compatibility
+        cleaned_ranges = [
+            float(r) if (msg.range_min < r < msg.range_max and not (r == float('inf') or r == float('nan'))) 
+            else 0.0 
+            for r in msg.ranges
+        ]
+        
+        data.update({
+            "ranges": cleaned_ranges,
+            "angle_min": msg.angle_min,
+            "angle_max": msg.angle_max,
+            "angle_increment": msg.angle_increment,
+            "range_min": msg.range_min,
+            "range_max": msg.range_max
+        })
+        
+    # 5. Handle Collision & Proximity
+    elif msg_type == "collision":
+        data.update({"status": msg.data})
+        
+    elif msg_type == "closest":
+        data.update({"dist": round(msg.data, 2)})
+
+    # Pushes the data packet from the ROS executor thread to the FastAPI async loop safely.
+    # This triggers the broadcast_to_operator function for the currently authorized user.
+    asyncio.run_coroutine_threadsafe(broadcast_to_operator(robot_id, data), loop)
+    
+@app.on_event("startup")
+async def startup_event():
+    global loop
+    loop = asyncio.get_running_loop()
+    # Start ROS in a background thread
+    threading.Thread(target=run_ros, daemon=True).start()
+    asyncio.create_task(_reap_sessions())
+
+def run_ros():
+    global ros_node
+    rclpy.init()
+    ros_node = Node('fleet_secure_relay')
+    
+    for rid, info in ROBOT_DATABASE.items():
+        ns = info['namespace']
+        # Secure relay subscriptions
+        ros_node.create_subscription(Odometry, f"/{ns}/odom", lambda m, r=rid: telemetry_callback(m, r, "odom"), 10)
+        ros_node.create_subscription(Pose, f"/{ns}/pose", lambda m, r=rid: telemetry_callback(m, r, "pose"), 10)
+        ros_node.create_subscription(Imu, f"/{ns}/imu", lambda m, r=rid: telemetry_callback(m, r, "imu"), 10)
+        ros_node.create_subscription(LaserScan, f"/{ns}/scan", lambda m, r=rid: telemetry_callback(m, r, "scan"), 10)
+        ros_node.create_subscription(String, f"/{ns}/collision_status", lambda m, r=rid: telemetry_callback(m, r, "collision"), 10)
+    
+    print("ROS 2 Secure Relay Node Spinning...")
+    rclpy.spin(ros_node)
+
 @app.get("/")
 async def get_dashboard():
     return HTMLResponse(html_content)
 
-@app.get("/api/robot/{robot_id}")
-async def get_robot_info(robot_id: str):
-    clean_id = robot_id.strip().upper()
-    if clean_id in ROBOT_DATABASE:
-        return ROBOT_DATABASE[clean_id]
-    raise HTTPException(status_code=404, detail="Robot ID not found")
 
-@app.post("/api/robot/{robot_id}/pose")
-async def update_robot_pose(robot_id: str, payload: PoseUpdate):
+# ── Page-unload release via query param (sendBeacon fallback) ──────────────────
+
+@app.get("/api/robot/{robot_id}/stream")
+async def gated_video_stream(robot_id: str, token: str):
+    """
+    Proxies MJPEG frames only if the token matches the current owner.
+    """
     clean_id = robot_id.strip().upper()
-    if clean_id not in ROBOT_DATABASE:
-        raise HTTPException(status_code=404, detail="Robot ID not found")
-    ROBOT_DATABASE[clean_id]["x"] = payload.x
-    ROBOT_DATABASE[clean_id]["y"] = payload.y
-    return {"status": "updated", "x": payload.x, "y": payload.y}
+    session = _sessions.get(clean_id)
+
+    if not session or session["token"] != token:
+        raise HTTPException(status_code=403, detail="Unauthorized video access")
+
+    namespace = ROBOT_DATABASE[clean_id]["namespace"]
+    target_url = f"http://localhost:8080/stream?topic=/{namespace}/camera/image_raw"
+    
+    async def stream_generator():
+        async with httpx.AsyncClient() as client:
+            async with client.stream("GET", target_url) as r:
+                async for chunk in r.aiter_bytes():
+                    # CRITICAL: Re-check token for every frame to stop 'ghost' streams
+                    if _sessions.get(clean_id, {}).get("token") != token:
+                        print(f"[video proxy] Revoking stream for {clean_id} - Ownership changed.")
+                        break
+                    yield chunk
+
+    return StreamingResponse(
+        stream_generator(), 
+        media_type="multipart/x-mixed-replace; boundary=boundarydonotcross"
+    )
+
+@app.websocket("/api/robot/{robot_id}/ws")
+async def secure_telemetry_relay(websocket: WebSocket, robot_id: str, token: str):
+    """
+    Secure WebSocket for telemetry. Automatically severs when token expires.
+    """
+    clean_id = robot_id.strip().upper()
+    session = _sessions.get(clean_id)
+    
+    if not session or session["token"] != token:
+        await websocket.close(code=4003)
+        return
+
+    await websocket.accept()
+    _active_ws[clean_id] = websocket
+
+    try:
+        while True:
+            # We don't expect data from the client, but we must receive to detect disconnects
+            await websocket.receive_text()
+            # If the session was stolen, close this old socket immediately
+            if _sessions.get(clean_id, {}).get("token") != token:
+                break
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if _active_ws.get(clean_id) == websocket:
+            _active_ws.pop(clean_id, None)
+
+# ── sendBeacon-compatible release (always POST) ────────────────────────────────
+# navigator.sendBeacon() always sends POST, so the DELETE /claim endpoint is
+# unreachable from beforeunload.  This endpoint accepts POST and works
+# identically to the DELETE handler — it exists purely to give sendBeacon a
+# method-compatible target.
+
+async def perform_release(robot_id: str, token: str):
+    clean_id = robot_id.strip().upper()
+    session = _sessions.get(clean_id)
+    if session and session["token"] == token:
+        del _sessions[clean_id]
+        _active_ws.pop(clean_id, None)
+        print(f"[session] {clean_id!r} released.")
+        return True
+    return False
+
+@app.delete("/api/robot/{robot_id}/claim")
+@app.post("/api/robot/{robot_id}/release")
+async def universal_release(robot_id: str, token: Optional[str] = None, x_session_token: Optional[str] = Header(default=None)):
+    actual_token = x_session_token or token
+    if await perform_release(robot_id, actual_token):
+        return {"status": "released"}
+    return {"status": "already_free_or_invalid"}
+
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
