@@ -252,6 +252,5 @@ void RobotController::publish_session_status()
     } else {
         msg.data = "FREE";
     }
-
     session_status_pub_->publish(msg);
 }
