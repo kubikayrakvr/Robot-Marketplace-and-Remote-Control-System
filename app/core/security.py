@@ -6,32 +6,45 @@ import uuid
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# RAM Caching: Anahtarları uygulama başlarken belleğe alıyoruz (Disk I/O Fix)
+# 🛡️ Güvenlik Notu: private.pem ve public.pem dosyalarının varlığından emin olmalısın.
+with open(settings.PRIVATE_KEY_PATH, "r") as f:
+    PRIVATE_KEY = f.read()
+
+with open(settings.PUBLIC_KEY_PATH, "r") as f:
+    PUBLIC_KEY = f.read()
+
 def hash_password(password: str) -> str:
     return pwd_context.hash(password)
 
 def verify_password(plain: str, hashed: str) -> bool:
     return pwd_context.verify(plain, hashed)
 
-# app/core/security.py
-
-def create_access_token(data: dict) -> str:
-    with open(settings.PRIVATE_KEY_PATH, "r") as f:
-        private_key = f.read()
-    
+def create_token(data: dict, expires_delta: timedelta | None = None, token_type: str = "access") -> str:
+    """
+    V4 standartlarına uygun; access, refresh, reset veya control token üretir.
+    """
     to_encode = data.copy()
-    to_encode.update({"jti": str(uuid.uuid4())})
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    to_encode.update({"exp": expire})
     
-    # BURASI KRİTİK: Algorithm=settings.ALGORITHM (RS256) olduğundan emin ol
-    return jwt.encode(to_encode, private_key, algorithm="RS256")
+    if not expires_delta:
+        if token_type == "access":
+            expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        elif token_type == "refresh":
+            expires_delta = timedelta(days=7)
+        else:
+            expires_delta = timedelta(minutes=15)
+
+    expire = datetime.now(timezone.utc) + expires_delta
+    
+    to_encode.update({
+        "exp": expire,
+        "jti": str(uuid.uuid4()), # 🛡️ Blacklist kontrolü için eşsiz kimlik
+        "type": token_type
+    })
+    return jwt.encode(to_encode, PRIVATE_KEY, algorithm=settings.ALGORITHM)
 
 def decode_token(token: str) -> dict | None:
-    with open(settings.PUBLIC_KEY_PATH, "r") as f:
-        public_key = f.read()
     try:
-        # DECODE EDERKEN: algorithms parametresi liste almalıdır
-        return jwt.decode(token, public_key, algorithms=["RS256"])
-    except JWTError as e:
-        print(f"JWT Decode Hatası: {e}") # Hata ayıklama için
+        return jwt.decode(token, PUBLIC_KEY, algorithms=[settings.ALGORITHM])
+    except JWTError:
         return None

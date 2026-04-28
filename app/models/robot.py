@@ -40,4 +40,6 @@ class UserRobot(Base):
     nickname = Column(String) # Kullanıcının robota verdiği özel isim
     activated_at = Column(DateTime(timezone=True), server_default=func.now())
 
+    # 🤝 KRİTİK DÜZELTME: User modelindeki 'owned_robots' ile el sıkışıyoruz.
+    user = relationship("User", back_populates="owned_robots")
     inventory = relationship("RobotInventory", back_populates="user_robot")
