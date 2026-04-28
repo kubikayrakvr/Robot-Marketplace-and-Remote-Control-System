@@ -1,23 +1,27 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
-
-const fakeRobots = [
-  { id: 1, name: 'Robot Alpha', model: 'RA-100', status: 'Aktif', owner: 'Altan Turan', registeredAt: '2026-01-15' },
-  { id: 2, name: 'Robot Beta', model: 'RB-200', status: 'Beklemede', owner: 'Veli Yılmaz', registeredAt: '2026-02-20' },
-  { id: 3, name: 'Robot Gamma', model: 'RG-300', status: 'Pasif', owner: 'Ayşe Kaya', registeredAt: '2026-03-10' },
-  { id: 4, name: 'Robot Delta', model: 'RD-400', status: 'Aktif', owner: 'Mehmet Demir', registeredAt: '2026-04-05' },
-];
-
-function getStatusClass(status) {
-  if (status === 'Aktif') return 'aktif';
-  if (status === 'Beklemede') return 'beklemede';
-  return 'pasif';
-}
+import { fetchRobots } from './adminApi';
 
 function AdminRobotsPage() {
-  const activeCount = fakeRobots.filter(r => r.status === 'Aktif').length;
-  const pendingCount = fakeRobots.filter(r => r.status === 'Beklemede').length;
+  const [robots, setRobots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    fetchRobots()
+      .then((data) => {
+        setRobots(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  const availableCount = robots.filter(r => r.is_available).length;
+  const outOfStockCount = robots.filter(r => r.stock_count === 0).length;
 
   return (
     <AdminLayout>
@@ -35,72 +39,87 @@ function AdminRobotsPage() {
         <div className="admin-stat-card">
           <div className="admin-stat-icon robots">🤖</div>
           <div className="admin-stat-info">
-            <h3>{fakeRobots.length}</h3>
-            <p>Toplam Robot</p>
+            <h3>{robots.length}</h3>
+            <p>Toplam Model</p>
           </div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon active">✅</div>
           <div className="admin-stat-info">
-            <h3>{activeCount}</h3>
-            <p>Aktif Robot</p>
+            <h3>{availableCount}</h3>
+            <p>Satışta</p>
           </div>
         </div>
         <div className="admin-stat-card">
           <div className="admin-stat-icon users">⏳</div>
           <div className="admin-stat-info">
-            <h3>{pendingCount}</h3>
-            <p>Onay Bekleyen</p>
+            <h3>{outOfStockCount}</h3>
+            <p>Stok Tükendi</p>
           </div>
         </div>
       </div>
 
-      {/* Table */}
-      <div className="admin-table-card">
-        <div className="admin-table-header">
-          <h2>Kayıtlı Robotlar</h2>
-          <span className="count-badge">{fakeRobots.length} robot</span>
+      {/* Loading / Error States */}
+      {loading && (
+        <div className="admin-table-card">
+          <div className="admin-loading">Yükleniyor...</div>
         </div>
-        <table className="admin-table">
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Robot</th>
-              <th>Model</th>
-              <th>Durum</th>
-              <th>Sahip</th>
-              <th>Kayıt Tarihi</th>
-              <th>İşlemler</th>
-            </tr>
-          </thead>
-          <tbody>
-            {fakeRobots.map(robot => (
-              <tr key={robot.id}>
-                <td>#{robot.id}</td>
-                <td className="robot-name">{robot.name}</td>
-                <td>{robot.model}</td>
-                <td>
-                  <span className={`status-badge ${getStatusClass(robot.status)}`}>
-                    {robot.status}
-                  </span>
-                </td>
-                <td>{robot.owner}</td>
-                <td>{robot.registeredAt}</td>
-                <td>
-                  <div className="admin-actions">
-                    <Link to={`/admin/robots/bilgi/${robot.id}`} className="admin-btn info">
-                      👁 Bilgi
-                    </Link>
-                    <Link to={`/admin/robots/duzenle/${robot.id}`} className="admin-btn edit">
-                      ✏️ Düzenle
-                    </Link>
-                  </div>
-                </td>
+      )}
+
+      {error && (
+        <div className="admin-table-card">
+          <div className="admin-error">❌ Hata: {error}</div>
+        </div>
+      )}
+
+      {/* Table */}
+      {!loading && !error && (
+        <div className="admin-table-card">
+          <div className="admin-table-header">
+            <h2>Robot Kataloğu</h2>
+            <span className="count-badge">{robots.length} model</span>
+          </div>
+          <table className="admin-table">
+            <thead>
+              <tr>
+                <th>ID</th>
+                <th>Robot Adı</th>
+                <th>Model Tipi</th>
+                <th>Fiyat</th>
+                <th>Stok</th>
+                <th>Durum</th>
+                <th>İşlemler</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+            </thead>
+            <tbody>
+              {robots.map(robot => (
+                <tr key={robot.id}>
+                  <td>#{robot.id}</td>
+                  <td className="robot-name">{robot.name}</td>
+                  <td>{robot.model_type}</td>
+                  <td>{robot.price.toLocaleString('tr-TR')} ₺</td>
+                  <td>{robot.stock_count}</td>
+                  <td>
+                    <span className={`status-badge ${robot.is_available ? 'aktif' : 'pasif'}`}>
+                      {robot.is_available ? 'Satışta' : 'Pasif'}
+                    </span>
+                  </td>
+                  <td>
+                    <div className="admin-actions">
+                      <Link to={`/admin/robots/bilgi/${robot.id}`} className="admin-btn info">
+                        👁 Bilgi
+                      </Link>
+                      <Link to={`/admin/robots/duzenle/${robot.id}`} className="admin-btn edit">
+                        ✏️ Düzenle
+                      </Link>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </AdminLayout>
   );
 }

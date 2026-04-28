@@ -38,7 +38,15 @@ function RegisterPage() {
 
       if (!response.ok) {
         const errData = await response.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Kayıt başarısız');
+        let errorMessage = 'Kayıt başarısız';
+        if (errData.detail) {
+          if (Array.isArray(errData.detail)) {
+            errorMessage = errData.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+          } else {
+            errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       // 2) Auto-login after register

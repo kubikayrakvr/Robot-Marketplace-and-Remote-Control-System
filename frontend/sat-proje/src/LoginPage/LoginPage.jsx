@@ -28,7 +28,15 @@ function LoginPage() {
 
       if (!loginRes.ok) {
         const errData = await loginRes.json().catch(() => ({}));
-        throw new Error(errData.detail || 'Giriş başarısız');
+        let errorMessage = 'Giriş başarısız';
+        if (errData.detail) {
+          if (Array.isArray(errData.detail)) {
+            errorMessage = errData.detail.map(err => `${err.loc.join('.')}: ${err.msg}`).join(', ');
+          } else {
+            errorMessage = typeof errData.detail === 'string' ? errData.detail : JSON.stringify(errData.detail);
+          }
+        }
+        throw new Error(errorMessage);
       }
 
       const { access_token } = await loginRes.json();
