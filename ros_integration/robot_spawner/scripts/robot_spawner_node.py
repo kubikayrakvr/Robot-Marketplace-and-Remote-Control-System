@@ -11,60 +11,65 @@ import signal
 import ctypes
 
 class RobotSpawner(Node):
-
     def __init__(self):
-        super().__init__('robot_spawner_node')
+            super().__init__('robot_spawner_node')
 
-        self.declare_parameter('spawn_signal_topic', '/spawn_signal_topic')
-        self.declare_parameter('sdf_package_name',   'robot_spawner')
-        self.declare_parameter('robot_sdf_path',     'models/waffle/model.sdf')
+            self.declare_parameter('spawn_signal_topic', '/spawn_signal_topic')
+            self.declare_parameter('sdf_package_name',   'robot_spawner')
 
-        topic = self.get_parameter('spawn_signal_topic').get_parameter_value().string_value
-        pkg   = self.get_parameter('sdf_package_name').get_parameter_value().string_value
-        rel   = self.get_parameter('robot_sdf_path').get_parameter_value().string_value
+            topic = self.get_parameter('spawn_signal_topic').get_parameter_value().string_value
+            
+            # Storage for process management
+            self._processes: dict[str, list[subprocess.Popen]] = {}
+            self._spawned:  set[str] = set()
 
-        share          = ament.get_package_share_directory(pkg)
-        self._sdf_path = f'{share}/{rel}'
+            self._spawn_sub = self.create_subscription(
+                String, topic, self._on_spawn_signal, 10)
 
-        # Storage for process management
-        self._processes: dict[str, list[subprocess.Popen]] = {}
-        self._spawned:  set[str] = set()
-
-        self._spawn_sub = self.create_subscription(
-            String, topic, self._on_spawn_signal, 10)
-
-        self.get_logger().info(f'Listening on {topic!r}')
+            self.get_logger().info(f'Listening on {topic!r}')
 
     # ── Spawn signal (async so we can await the service future) ───────────────
 
     def _on_spawn_signal(self, msg: String):
         try:
-            ns, x_str, y_str = msg.data.split(',', 2)
+            parts = msg.data.split(',')
+            if len(parts) != 4:
+                # Strictly enforce 4 parameters: ns, x, y, type
+                raise ValueError("Payload must exactly contain ns,x,y,type")
+                
+            ns, x_str, y_str, robot_type = parts
             x, y = float(x_str), float(y_str)
-        except ValueError:
-            self.get_logger().error(f'Bad payload: {msg.data!r}  (expected ns,x,y)')
+            
+        except ValueError as e:
+            self.get_logger().error(f'Spawn aborted. Bad payload: {msg.data!r} ({e})')
             return
 
         if ns in self._spawned:
             self.get_logger().warn(f'{ns!r} already spawned — ignoring.')
             return
 
-        sdf = self._load_sdf(ns)
+        sdf = self._load_sdf(ns, robot_type)
         if sdf is None:
+            # File missing/cannot be opened. Abort.
             return
 
         # Fire and forget! 
-        # The _launch_ros_processes logic is now handled in _on_spawn_response
         self._gazebo_spawn(ns, sdf, x, y)
 
     # ── SDF loading ───────────────────────────────────────────────────────────
 
-    def _load_sdf(self, ns: str) -> str | None:
+    def _load_sdf(self, ns: str, robot_type: str) -> str | None:
+        pkg = self.get_parameter('sdf_package_name').get_parameter_value().string_value
+        share = ament.get_package_share_directory(pkg)
+        
+        # Dynamically build the path using the requested robot_type
+        sdf_path = f'{share}/models/{robot_type}/model.sdf'
+        
         try:
-            with open(self._sdf_path) as f:
+            with open(sdf_path) as f:
                 sdf = f.read()
         except OSError as e:
-            self.get_logger().error(f'Cannot open SDF: {e}')
+            self.get_logger().error(f'Cannot open SDF for {robot_type!r} at {sdf_path}: {e}')
             return None
 
         if '__ROBOT_NAMESPACE__' not in sdf:

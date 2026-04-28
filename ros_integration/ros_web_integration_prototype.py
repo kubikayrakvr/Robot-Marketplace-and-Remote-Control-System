@@ -68,9 +68,18 @@ async def _reap_sessions():
 # ── Database ───────────────────────────────────────────────────────────────────
 
 ROBOT_DATABASE: dict[str, dict] = {
-    "ROB-100": {"namespace": "rob100", "x": 2.0,  "y": 1.5 },
-    "ROB-200": {"namespace": "rob200", "x": -3.0, "y": -1.0},
-    "ROB-300": {"namespace": "rob300", "x": 5.0,  "y": 0.0 },
+    "ROB-100": {
+        "namespace": "rob100", "x": 0.0,  "y": 0.5,  "type": "waffle", 
+        "sensors": ["imu", "scan", "camera"]
+    },
+    "ROB-200": {
+        "namespace": "rob200", "x": -3.0, "y": 0.5, "type": "burger", 
+        "sensors": ["imu", "scan"]  # <-- Notice: No camera here!
+    },
+    "ROB-300": {
+        "namespace": "rob300", "x": 5.0,  "y": 0.5,  "type": "waffle", 
+        "sensors": ["imu", "scan", "camera"]
+    },
 }
 
 
@@ -580,6 +589,8 @@ html_content = """
         let lastPoseData      = null;
         let currentNamespace  = "";
         let currentRobotId    = "";
+        let currentRobotType  = "";
+        let currentRobotSensors = [];
         let joystickActive    = false;
         let activeKeys        = new Set();
 
@@ -785,11 +796,21 @@ html_content = """
 
                 const spawnX = (data.x != null) ? data.x : 0.0;
                 const spawnY = (data.y != null) ? data.y : 0.0;
+                const robotType = data.type;
+
+                // STRICT VALIDATION: Do not default. Do not send signal if incorrect.
+                const supportedTypes = ["waffle", "burger"]; // Define supported models here
+                if (!robotType || !supportedTypes.includes(robotType)) {
+                    throw new Error("Configuration Error: Robot type '" + robotType + "' is missing or unsupported. Connection aborted.");
+                }
+                currentRobotType = robotType;
+
+                currentRobotSensors   = data.sensors || [];
 
                 infoDisplay.style.display = "block";
                 document.getElementById("db-namespace").innerText = targetNamespace;
                 document.getElementById("db-coords").innerText    =
-                    "x: " + spawnX.toFixed(2) + ", y: " + spawnY.toFixed(2);
+                    "x: " + spawnX.toFixed(2) + ", y: " + spawnY.toFixed(2) + " (" + robotType + ")";
 
                 // ── 2. Claim exclusive session ────────────────────────────────
                 // This must succeed before we attempt a rosbridge connection.
@@ -838,7 +859,7 @@ html_content = """
                 });
 
                 spawnTopic.publish(new ROSLIB.Message({
-                    data: `${targetNamespace},${spawnX},${spawnY}`
+                    data: `${targetNamespace},${spawnX},${spawnY},${robotType}`
                 }));
 
                 // Give Gazebo a few seconds to spawn and the ros_gz_bridge
@@ -987,16 +1008,32 @@ html_content = """
                 messageType: 'std_msgs/msg/String'
             });
 
-            // 2. Setup Gated Video Proxy
+            // 2. Setup Gated Video Proxy (Sensor-Aware)
             const videoStream = document.getElementById('video-stream');
             const camPlaceholder = document.getElementById('cam-placeholder');
 
-            if (videoStream) {
-                // Point to the FastAPI Proxy instead of the public port 8080
-                videoStream.src = `/api/robot/${currentRobotId}/stream?token=${sessionToken}`;
-                videoStream.style.display = 'block';
+            // Check if the current robot's hardware includes a camera
+            if (!currentRobotSensors.includes("camera")) {
+                // No camera equipped. Hide stream and show placeholder.
+                if (videoStream) {
+                    videoStream.src = "";
+                    videoStream.style.display = 'none';
+                }
+                if (camPlaceholder) {
+                    camPlaceholder.style.display = 'flex';
+                    camPlaceholder.innerText = "📷 Camera not equipped on this configuration.";
+                }
+                document.getElementById("cam-topic-label").innerText = "Topic: N/A (No Camera)";
+            } else {
+                // Camera equipped! Load the stream.
+                if (videoStream) {
+                    videoStream.src = `/api/robot/${currentRobotId}/stream?token=${sessionToken}`;
+                    videoStream.style.display = 'block';
+                }
+                if (camPlaceholder) camPlaceholder.style.display = 'none';
+                document.getElementById("cam-topic-label").innerText = 
+                    "Topic: /" + ns + "/camera/image_raw (MJPEG)";
             }
-            if (camPlaceholder) camPlaceholder.style.display = 'none';
 
             // 3. Open a Secure WebSocket to the FastAPI Bouncer
             if (secureWS) {
@@ -1333,7 +1370,7 @@ def run_ros():
         ns = info['namespace']
         # Secure relay subscriptions
         ros_node.create_subscription(Odometry, f"/{ns}/odom", lambda m, r=rid: telemetry_callback(m, r, "odom"), 10)
-        ros_node.create_subscription(Pose, f"/{ns}/pose", lambda m, r=rid: telemetry_callback(m, r, "pose"), 10)
+        ros_node.create_subscription(Pose, f"/model/{ns}/pose", lambda m, r=rid: telemetry_callback(m, r, "pose"), 10)
         ros_node.create_subscription(Imu, f"/{ns}/imu", lambda m, r=rid: telemetry_callback(m, r, "imu"), 10)
         ros_node.create_subscription(LaserScan, f"/{ns}/scan", lambda m, r=rid: telemetry_callback(m, r, "scan"), 10)
         ros_node.create_subscription(String, f"/{ns}/collision_status", lambda m, r=rid: telemetry_callback(m, r, "collision"), 10)
@@ -1346,18 +1383,17 @@ async def get_dashboard():
     return HTMLResponse(html_content)
 
 
-# ── Page-unload release via query param (sendBeacon fallback) ──────────────────
-
 @app.get("/api/robot/{robot_id}/stream")
 async def gated_video_stream(robot_id: str, token: str):
-    """
-    Proxies MJPEG frames only if the token matches the current owner.
-    """
     clean_id = robot_id.strip().upper()
     session = _sessions.get(clean_id)
 
     if not session or session["token"] != token:
         raise HTTPException(status_code=403, detail="Unauthorized video access")
+
+    # DYNAMIC CHECK: Does this specific robot have a camera listed in its sensors?
+    if "camera" not in ROBOT_DATABASE[clean_id].get("sensors", []):
+        raise HTTPException(status_code=404, detail="This robot is not equipped with a camera.")
 
     namespace = ROBOT_DATABASE[clean_id]["namespace"]
     target_url = f"http://localhost:8080/stream?topic=/{namespace}/camera/image_raw"
