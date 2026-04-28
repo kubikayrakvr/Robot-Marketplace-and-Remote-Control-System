@@ -1,9 +1,14 @@
 const SESSION_KEY = 'satproje.session';
 
-export function saveMockSession(user) {
+/**
+ * Save real session after login.
+ * @param {{ access_token: string, user: object }} sessionData
+ */
+export function saveMockSession(sessionData) {
+  // sessionData should have { access_token, user: { id, email, username, is_admin } }
   const session = {
-    token: 'mock-jwt-token',
-    user,
+    token: sessionData.access_token,
+    user: sessionData.user,
   };
   localStorage.setItem(SESSION_KEY, JSON.stringify(session));
 }
@@ -25,3 +30,10 @@ export function clearMockSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+/**
+ * Get stored access token (convenience).
+ */
+export function getAccessToken() {
+  const session = getMockSession();
+  return session?.token ?? null;
+}

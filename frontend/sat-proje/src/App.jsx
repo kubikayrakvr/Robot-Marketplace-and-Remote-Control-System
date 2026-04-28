@@ -11,6 +11,11 @@ import ActivateRobotPage from './MyRobotsPage/ActivateRobotPage';
 import RobotInfoPage from './MyRobotsPage/RobotInfoPage';
 import ControlSelectionPage from './ControlPage/ControlSelectionPage';
 import ControlPanelPage from './ControlPage/ControlPanelPage';
+import AdminRobotsPage from './AdminPage/AdminRobotsPage';
+import AdminRobotInfoPage from './AdminPage/AdminRobotInfoPage';
+import AdminRobotEditPage from './AdminPage/AdminRobotEditPage';
+import AdminUsersPage from './AdminPage/AdminUsersPage';
+import AdminUserInfoPage from './AdminPage/AdminUserInfoPage';
 import { CartProvider } from './context/CartContext';
 import { RobotProvider } from './context/RobotContext';
 import { getMockSession } from './auth/mockSession';
@@ -104,6 +109,11 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route path="/admin/robots" element={<AdminRobotsPage />} />
+          <Route path="/admin/robots/bilgi/:id" element={<AdminRobotInfoPage />} />
+          <Route path="/admin/robots/duzenle/:id" element={<AdminRobotEditPage />} />
+          <Route path="/admin/kullanicilar" element={<AdminUsersPage />} />
+          <Route path="/admin/user/bilgi/:id" element={<AdminUserInfoPage />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </CartProvider>

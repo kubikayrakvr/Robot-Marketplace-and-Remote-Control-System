@@ -5,7 +5,7 @@ import { clearMockSession, getMockSession } from '../auth/mockSession';
 function UserPage() {
   const navigate = useNavigate();
   const session = useMemo(() => getMockSession(), []);
-  const user = session?.user ?? { fullName: 'Altan', email: 'altan@example.com' };
+  const user = session?.user ?? { username: 'Kullanıcı', email: '' };
 
   const actionCards = [
     { key: 'store', title: 'Magaza', subtitle: 'Yeni robotlari kesfet, teknik detaylari incele, satin alma adimina gec.', icon: '🛒' },
@@ -14,7 +14,7 @@ function UserPage() {
     { key: 'profile', title: 'Bilgilerim', subtitle: 'Profil, e-posta, guvenlik ayarlari ve hesap durumunu yonet.', icon: '👤' },
   ];
 
-  const firstName = user.fullName?.split(' ')[0] ?? 'Altan';
+  const displayName = user.username ?? 'Kullanıcı';
 
   function handleLogout() {
     clearMockSession();
@@ -27,13 +27,13 @@ function UserPage() {
         <header className="user-header">
           <div className="user-welcome">
             <p className="user-eyebrow">Kullanici Paneli</p>
-            <h1>Hos geldiniz, {firstName}</h1>
+            <h1>Hos geldiniz, {displayName}</h1>
             <p className="user-subtitle">
               Robot ekosistemine baglisin. Simdi robot satin alabilir, etkinlestirip kontrol paneline gecebilirsin.
             </p>
           </div>
           <div className="user-meta">
-            <div className="avatar">{firstName.slice(0, 1).toUpperCase()}</div>
+            <div className="avatar">{displayName.slice(0, 1).toUpperCase()}</div>
             <button type="button" className="secondary-button" onClick={handleLogout}>
               Cikis yap
             </button>
