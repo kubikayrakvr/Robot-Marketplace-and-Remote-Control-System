@@ -1,9 +1,14 @@
+import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 
 function CartPage() {
   const navigate = useNavigate();
-  const { cartItems, removeFromCart, cartTotal } = useCart();
+  const { cartItems, cartTotal, cartItemCount, removeFromCart, refreshCart, loading } = useCart();
+
+  useEffect(() => {
+    refreshCart();
+  }, [refreshCart]);
 
   return (
     <div className="user-page">
@@ -28,7 +33,12 @@ function CartPage() {
         </header>
 
         <section className="cart-content">
-          {cartItems.length === 0 ? (
+          {loading ? (
+            <div className="empty-cart">
+              <div className="empty-icon">⏳</div>
+              <h2>Yukleniyor...</h2>
+            </div>
+          ) : cartItems.length === 0 ? (
             <div className="empty-cart">
               <div className="empty-icon">🛒</div>
               <h2>Sepetiniz su an bos.</h2>
@@ -46,12 +56,14 @@ function CartPage() {
               <div className="cart-items">
                 {cartItems.map((item) => (
                   <div key={item.id} className="cart-item">
-                    <div className="cart-item-icon">{item.icon}</div>
+                    <div className="cart-item-icon">🤖</div>
                     <div className="cart-item-details">
-                      <h3>{item.name}</h3>
+                      <h3>{item.product_name}</h3>
                       <p>Adet: {item.quantity}</p>
                     </div>
-                    <div className="cart-item-price">${item.price * item.quantity}</div>
+                    <div className="cart-item-price">
+                      {item.subtotal.toLocaleString('tr-TR')} ₺
+                    </div>
                     <button
                       type="button"
                       className="remove-button"
@@ -67,7 +79,7 @@ function CartPage() {
                 <h3>Siparis Ozeti</h3>
                 <div className="summary-row">
                   <span>Ara Toplam</span>
-                  <span>${cartTotal}</span>
+                  <span>{cartTotal.toLocaleString('tr-TR')} ₺</span>
                 </div>
                 <div className="summary-row">
                   <span>Kargo</span>
@@ -76,7 +88,7 @@ function CartPage() {
                 <div className="summary-divider"></div>
                 <div className="summary-row total">
                   <span>Toplam</span>
-                  <span>${cartTotal}</span>
+                  <span>{cartTotal.toLocaleString('tr-TR')} ₺</span>
                 </div>
                 <button
                   type="button"

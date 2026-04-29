@@ -1,6 +1,6 @@
 import RegisterForm from './RegisterForm';
 import { Link, useNavigate } from 'react-router-dom';
-import { saveMockSession } from '../auth/mockSession';
+import { saveSession } from '../auth/session';
 
 function RegisterPage() {
   const navigate = useNavigate();
@@ -76,7 +76,7 @@ function RegisterPage() {
 
       const user = await meRes.json();
 
-      saveMockSession({ access_token, user });
+      saveSession({ access_token, user });
       navigate('/user');
     } catch (error) {
       console.error(error);

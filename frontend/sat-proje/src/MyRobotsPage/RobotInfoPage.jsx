@@ -1,27 +1,7 @@
-import { useParams, useNavigate } from 'react-router-dom';
-import { useRobots } from '../context/RobotContext';
+import { useNavigate } from 'react-router-dom';
 
 function RobotInfoPage() {
-  const { id } = useParams();
   const navigate = useNavigate();
-  const { ownedRobots } = useRobots();
-
-  const robot = ownedRobots.find((r) => r.instanceId === id);
-
-  if (!robot) {
-    return (
-      <div className="user-page">
-        <div className="user-shell">
-          <h2>Robot bulunamadi.</h2>
-          <button className="secondary-button" onClick={() => navigate('/user/robotlarim')}>Geri Don</button>
-        </div>
-      </div>
-    );
-  }
-
-  // Placeholder veriler
-  const batteryLevel = Math.floor(Math.random() * 40) + 60; // 60-100 arasi salla
-  const signalStrength = 'Mukemmel';
 
   return (
     <div className="user-page">
@@ -29,9 +9,9 @@ function RobotInfoPage() {
         <header className="user-header">
           <div className="user-welcome">
             <p className="user-eyebrow">Durum Paneli</p>
-            <h1>{robot.name}</h1>
+            <h1>Robot Durumu</h1>
             <p className="user-subtitle">
-              Seri No: {robot.serialNumber}
+              Robot durum bilgileri, ROS/Gazebo entegrasyonu tamamlandiginda burada gosterilecektir.
             </p>
           </div>
           <div className="user-meta">
@@ -47,28 +27,23 @@ function RobotInfoPage() {
 
         <section className="robot-info-content">
           <div className="info-card">
-            <div className="info-icon">{robot.icon}</div>
+            <div className="info-icon">🤖</div>
             <div className="info-stats">
               <div className="stat-box">
-                <span className="stat-label">Batarya</span>
-                <span className="stat-value">{batteryLevel}%</span>
-              </div>
-              <div className="stat-box">
-                <span className="stat-label">Sinyal</span>
-                <span className="stat-value">{signalStrength}</span>
-              </div>
-              <div className="stat-box">
                 <span className="stat-label">Durum</span>
-                <span className="stat-value text-green">Cevrimici</span>
+                <span className="stat-value">Bekleniyor</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Baglanti</span>
+                <span className="stat-value">Cevrimdisi</span>
               </div>
             </div>
-            <p className="info-desc">{robot.description}</p>
+            <p className="info-desc">
+              Robotunuzun detayli durum bilgisi, Gazebo simulasyon sunucusu ve ROS 2 entegrasyonu tamamlandiginda burada canli olarak goruntulenecektir.
+            </p>
             <div className="info-actions">
-              <button className="primary-button" onClick={() => alert('Simulasyona baglaniliyor... (Placeholder)')}>
-                Simulasyona Baglan
-              </button>
-              <button className="secondary-button" onClick={() => alert('Yazilim guncelleniyor... (Placeholder)')}>
-                Yazilimi Guncelle
+              <button className="primary-button" onClick={() => navigate('/user/kontrol')}>
+                Kontrol Paneline Git
               </button>
             </div>
           </div>

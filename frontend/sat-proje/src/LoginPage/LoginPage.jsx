@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { saveMockSession } from '../auth/mockSession';
+import { saveSession } from '../auth/session';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -53,7 +53,7 @@ function LoginPage() {
       const user = await meRes.json(); // { id, email, username, is_admin }
 
       // 3) Save session
-      saveMockSession({ access_token, user });
+      saveSession({ access_token, user });
 
       navigate('/user');
     } catch (err) {
@@ -101,7 +101,7 @@ function LoginPage() {
         </form>
         <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '1rem' }}>
           <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Yönetici misiniz?</p>
-          <Link to="/admin/robots" className="secondary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
+          <Link to="/admin/login" className="secondary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>
             ⚙️ Admin Paneline Git
           </Link>
         </div>

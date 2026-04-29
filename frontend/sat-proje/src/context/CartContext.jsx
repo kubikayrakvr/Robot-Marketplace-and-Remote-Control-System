@@ -1,42 +1,68 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useCallback } from 'react';
+import { fetchCart, addItemToCart, updateCartItem, clearCartOnBackend } from '../api/userApi';
 
 const CartContext = createContext();
 
 export function CartProvider({ children }) {
   const [cartItems, setCartItems] = useState([]);
+  const [cartTotal, setCartTotal] = useState(0);
+  const [loading, setLoading] = useState(false);
 
-  const addToCart = (product) => {
-    setCartItems((prevItems) => {
-      const existingItem = prevItems.find((item) => item.id === product.id);
-      if (existingItem) {
-        return prevItems.map((item) =>
-          item.id === product.id ? { ...item, quantity: item.quantity + 1 } : item
-        );
-      }
-      return [...prevItems, { ...product, quantity: 1 }];
-    });
+  /** Backend'den sepeti çeker ve state'i günceller */
+  const refreshCart = useCallback(async () => {
+    try {
+      setLoading(true);
+      const data = await fetchCart();
+      setCartItems(data.items || []);
+      setCartTotal(data.total_price || 0);
+    } catch {
+      // Oturum yoksa veya hata olursa sessizce boş bırak
+      setCartItems([]);
+      setCartTotal(0);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  /** Sepete ürün ekler (backend'e POST) */
+  const addToCart = async (productId, quantity = 1) => {
+    await addItemToCart(productId, quantity);
+    await refreshCart();
   };
 
-  const removeFromCart = (productId) => {
-    setCartItems((prevItems) => prevItems.filter((item) => item.id !== productId));
+  /** Sepet öğesini günceller veya siler (quantity=0 → sil) */
+  const updateItem = async (itemId, quantity) => {
+    await updateCartItem(itemId, quantity);
+    await refreshCart();
   };
 
-  const clearCart = () => {
+  /** Sepetteki bir öğeyi kaldırır */
+  const removeFromCart = async (itemId) => {
+    await updateCartItem(itemId, 0);
+    await refreshCart();
+  };
+
+  /** Sepeti tamamen temizler */
+  const clearCart = async () => {
+    await clearCartOnBackend();
     setCartItems([]);
+    setCartTotal(0);
   };
 
-  const cartTotal = cartItems.reduce((total, item) => total + item.price * item.quantity, 0);
   const cartItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
 
   return (
     <CartContext.Provider
       value={{
         cartItems,
-        addToCart,
-        removeFromCart,
-        clearCart,
         cartTotal,
         cartItemCount,
+        loading,
+        addToCart,
+        updateItem,
+        removeFromCart,
+        clearCart,
+        refreshCart,
       }}
     >
       {children}

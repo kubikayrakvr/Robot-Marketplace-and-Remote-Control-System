@@ -1,11 +1,19 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { clearAdminSession, getAdminSession } from './adminApi';
 import './Admin.css';
 
 function AdminLayout({ children }) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const session = getAdminSession();
 
   const isActive = (path) => location.pathname.startsWith(path);
+
+  function handleLogout() {
+    clearAdminSession();
+    navigate('/admin/login');
+  }
 
   return (
     <div className="admin-layout">
@@ -33,10 +41,18 @@ function AdminLayout({ children }) {
 
           <div className="admin-nav-spacer" />
 
-          <Link to="/login" className="admin-nav-link logout">
+          {/* Admin bilgisi */}
+          {session?.user && (
+            <div className="admin-nav-user">
+              <span className="nav-icon">🛡️</span>
+              <span className="admin-nav-username">{session.user.username}</span>
+            </div>
+          )}
+
+          <button onClick={handleLogout} className="admin-nav-link logout" type="button">
             <span className="nav-icon">🚪</span>
             Çıkış Yap
-          </Link>
+          </button>
         </nav>
       </aside>
 

@@ -1,22 +1,35 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-import { useRobots } from '../context/RobotContext';
+import { createOrder } from '../api/userApi';
 
 function CheckoutPage() {
   const navigate = useNavigate();
-  const { cartItems, cartTotal, clearCart } = useCart();
-  const { addPurchasedRobots } = useRobots();
+  const { cartItems, cartTotal, refreshCart } = useCart();
   const [isSuccess, setIsSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const handlePayment = (e) => {
+  useEffect(() => {
+    refreshCart();
+  }, [refreshCart]);
+
+  const handlePayment = async (e) => {
     e.preventDefault();
-    // Odeme islemini simule et
-    setTimeout(() => {
-      addPurchasedRobots(cartItems);
-      clearCart();
+    setError('');
+    setLoading(true);
+
+    const formData = new FormData(e.target);
+    const address = formData.get('address') || 'Belirtilmedi';
+
+    try {
+      await createOrder(address);
       setIsSuccess(true);
-    }, 1000);
+    } catch (err) {
+      setError(err.message || 'Sipariş oluşturulamadı');
+    } finally {
+      setLoading(false);
+    }
   };
 
   if (isSuccess) {
@@ -63,9 +76,29 @@ function CheckoutPage() {
         <section className="checkout-content">
           <div className="checkout-card">
             <h3>Odeme Bilgileri</h3>
-            <p className="checkout-amount">Odenecek Tutar: <strong>${cartTotal}</strong></p>
-            
+            <p className="checkout-amount">
+              Odenecek Tutar: <strong>{cartTotal.toLocaleString('tr-TR')} ₺</strong>
+            </p>
+
+            {error && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '12px',
+                color: '#f87171',
+                fontSize: '0.9rem',
+              }}>
+                {error}
+              </div>
+            )}
+
             <form className="auth-form checkout-form" onSubmit={handlePayment}>
+              <label>
+                Teslimat Adresi
+                <input type="text" name="address" placeholder="Adres giriniz" required />
+              </label>
               <label>
                 Kart Uzerindeki Isim
                 <input type="text" placeholder="Ad Soyad" required />
@@ -84,8 +117,12 @@ function CheckoutPage() {
                   <input type="text" placeholder="123" maxLength="3" required />
                 </label>
               </div>
-              <button type="submit" className="primary-button full-width">
-                Siparisi Tamamla
+              <button
+                type="submit"
+                className="primary-button full-width"
+                disabled={loading || cartItems.length === 0}
+              >
+                {loading ? 'Siparis Isleniyor...' : 'Siparisi Tamamla'}
               </button>
             </form>
           </div>

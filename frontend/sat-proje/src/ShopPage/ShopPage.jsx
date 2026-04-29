@@ -1,40 +1,38 @@
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
-
-const DUMMY_ROBOTS = [
-  {
-    id: 'r1',
-    name: 'AeroBot X1',
-    description: 'Hizli ve cevik gozlem robotu. Kapali alanlarda yuksek manevra kabiliyeti.',
-    price: 1200,
-    icon: '🚁',
-  },
-  {
-    id: 'r2',
-    name: 'TerraCrawler V2',
-    description: 'Zorlu arazi kosullari icin paletli kesif araci. Yuksek torklu motorlar.',
-    price: 3400,
-    icon: '🚜',
-  },
-  {
-    id: 'r3',
-    name: 'AquaDrone Pro',
-    description: 'Sualti haritalama ve inceleme amacli otonom dalgic robot.',
-    price: 5500,
-    icon: '🚤',
-  },
-  {
-    id: 'r4',
-    name: 'Sentinel Biped',
-    description: 'Iki ayakli devriye ve guvenlik robotu. Yapay zeka destekli goruntu isleme.',
-    price: 8900,
-    icon: '🤖',
-  },
-];
+import { fetchMarketRobots } from '../api/userApi';
 
 function ShopPage() {
   const navigate = useNavigate();
   const { addToCart, cartItemCount } = useCart();
+  const [robots, setRobots] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [addingId, setAddingId] = useState(null);
+
+  useEffect(() => {
+    fetchMarketRobots()
+      .then((data) => {
+        setRobots(data);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err.message);
+        setLoading(false);
+      });
+  }, []);
+
+  async function handleAddToCart(robot) {
+    try {
+      setAddingId(robot.id);
+      await addToCart(robot.id, 1);
+    } catch (err) {
+      alert(err.message || 'Sepete eklenemedi');
+    } finally {
+      setAddingId(null);
+    }
+  }
 
   return (
     <div className="user-page">
@@ -65,25 +63,55 @@ function ShopPage() {
           </div>
         </header>
 
-        <section className="shop-grid">
-          {DUMMY_ROBOTS.map((robot) => (
-            <div key={robot.id} className="product-card">
-              <div className="product-icon">{robot.icon}</div>
-              <h3 className="product-title">{robot.name}</h3>
-              <p className="product-desc">{robot.description}</p>
-              <div className="product-footer">
-                <span className="product-price">${robot.price}</span>
-                <button
-                  type="button"
-                  className="primary-button add-button"
-                  onClick={() => addToCart(robot)}
-                >
-                  Sepete Ekle
-                </button>
+        {loading && (
+          <div className="empty-cart">
+            <div className="empty-icon">⏳</div>
+            <h2>Yukleniyor...</h2>
+          </div>
+        )}
+
+        {error && (
+          <div className="empty-cart">
+            <div className="empty-icon">❌</div>
+            <h2>Hata</h2>
+            <p>{error}</p>
+          </div>
+        )}
+
+        {!loading && !error && (
+          <section className="shop-grid">
+            {robots.length === 0 ? (
+              <div className="empty-cart">
+                <div className="empty-icon">📦</div>
+                <h2>Henuz magaza bos.</h2>
+                <p>Yakin zamanda yeni robot modelleri eklenecek.</p>
               </div>
-            </div>
-          ))}
-        </section>
+            ) : (
+              robots.map((robot) => (
+                <div key={robot.id} className="product-card">
+                  <div className="product-icon">🤖</div>
+                  <h3 className="product-title">{robot.name}</h3>
+                  <p className="product-desc">
+                    {robot.model_type || 'Robot modeli'}
+                  </p>
+                  <div className="product-footer">
+                    <span className="product-price">
+                      {robot.price.toLocaleString('tr-TR')} ₺
+                    </span>
+                    <button
+                      type="button"
+                      className="primary-button add-button"
+                      onClick={() => handleAddToCart(robot)}
+                      disabled={addingId === robot.id}
+                    >
+                      {addingId === robot.id ? 'Ekleniyor...' : 'Sepete Ekle'}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

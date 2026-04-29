@@ -1,33 +1,50 @@
 import { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { useRobots } from '../context/RobotContext';
+import { useNavigate } from 'react-router-dom';
+import { activateRobotOnBackend } from '../api/userApi';
 
 function ActivateRobotPage() {
-  const { id } = useParams();
   const navigate = useNavigate();
-  const { ownedRobots, activateRobot } = useRobots();
-  const [serial, setSerial] = useState('');
+  const [code, setCode] = useState('');
+  const [nickname, setNickname] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState(false);
+  const [resultMsg, setResultMsg] = useState('');
 
-  const robot = ownedRobots.find((r) => r.instanceId === id);
+  const handleActivate = async (e) => {
+    e.preventDefault();
+    setError('');
+    setLoading(true);
 
-  if (!robot) {
+    try {
+      const result = await activateRobotOnBackend(code.trim(), nickname.trim());
+      setResultMsg(result.message || 'Robot basariyla aktiflesirildi!');
+      setSuccess(true);
+    } catch (err) {
+      setError(err.message || 'Aktivasyon basarisiz');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (success) {
     return (
       <div className="user-page">
-        <div className="user-shell">
-          <h2>Robot bulunamadi.</h2>
-          <button className="secondary-button" onClick={() => navigate('/user/robotlarim')}>Geri Don</button>
+        <div className="user-shell checkout-success">
+          <div className="success-icon">✅</div>
+          <h1>Aktivasyon Basarili!</h1>
+          <p>{resultMsg}</p>
+          <button
+            type="button"
+            className="primary-button"
+            onClick={() => navigate('/user')}
+          >
+            Panele Don
+          </button>
         </div>
       </div>
     );
   }
-
-  const handleActivate = (e) => {
-    e.preventDefault();
-    if (serial.trim()) {
-      activateRobot(id, serial.trim());
-      navigate(`/user/robotlarim/bilgi/${id}`);
-    }
-  };
 
   return (
     <div className="user-page">
@@ -37,14 +54,14 @@ function ActivateRobotPage() {
             <p className="user-eyebrow">Aktivasyon</p>
             <h1>Robot Tanimlama</h1>
             <p className="user-subtitle">
-              {robot.name} model robotunuzu kullanmaya baslamak icin kutusundan cikan seri numarasini girin.
+              Robotunuzu kullanmaya baslamak icin kutusundan cikan aktivasyon kodunu ve bir takma ad girin.
             </p>
           </div>
           <div className="user-meta">
             <button
               type="button"
               className="secondary-button"
-              onClick={() => navigate('/user/robotlarim')}
+              onClick={() => navigate('/user')}
             >
               Iptal
             </button>
@@ -53,21 +70,50 @@ function ActivateRobotPage() {
 
         <section className="checkout-content">
           <div className="checkout-card activation-card">
-            <div className="activation-icon">{robot.icon}</div>
-            <h3>{robot.name}</h3>
+            <div className="activation-icon">🤖</div>
+            <h3>Robot Aktiflestir</h3>
+
+            {error && (
+              <div style={{
+                background: 'rgba(239, 68, 68, 0.12)',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '8px',
+                padding: '10px 14px',
+                marginBottom: '12px',
+                color: '#f87171',
+                fontSize: '0.9rem',
+              }}>
+                {error}
+              </div>
+            )}
+
             <form className="auth-form" onSubmit={handleActivate}>
               <label>
-                Seri Numarasi
+                Aktivasyon Kodu
                 <input
                   type="text"
-                  placeholder="Orn: SN-1234-5678"
-                  value={serial}
-                  onChange={(e) => setSerial(e.target.value)}
+                  placeholder="Kutudaki aktivasyon kodunu girin"
+                  value={code}
+                  onChange={(e) => setCode(e.target.value)}
                   required
                 />
               </label>
-              <button type="submit" className="primary-button full-width">
-                Aktiflestir
+              <label>
+                Robot Takma Adi
+                <input
+                  type="text"
+                  placeholder="Orn: Benim Robotum"
+                  value={nickname}
+                  onChange={(e) => setNickname(e.target.value)}
+                  required
+                />
+              </label>
+              <button
+                type="submit"
+                className="primary-button full-width"
+                disabled={loading}
+              >
+                {loading ? 'Aktiflestiriliyor...' : 'Aktiflestir'}
               </button>
             </form>
           </div>

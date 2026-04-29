@@ -1,23 +1,29 @@
 import { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { clearMockSession, getMockSession } from '../auth/mockSession';
+import { clearSession, getSession } from '../auth/session';
+import { logoutFromBackend } from '../api/userApi';
 
 function UserPage() {
   const navigate = useNavigate();
-  const session = useMemo(() => getMockSession(), []);
+  const session = useMemo(() => getSession(), []);
   const user = session?.user ?? { username: 'Kullanıcı', email: '' };
 
   const actionCards = [
     { key: 'store', title: 'Magaza', subtitle: 'Yeni robotlari kesfet, teknik detaylari incele, satin alma adimina gec.', icon: '🛒' },
     { key: 'robots', title: 'Robotlarim', subtitle: 'Satin aldigin robotlari gor ve aktivasyon kodu ile etkinlestir.', icon: '🤖' },
     { key: 'control', title: 'Kontrol', subtitle: 'Gazebo sim ortamindaki robotuna baglanip uzaktan komut gonder.', icon: '🎮' },
-    { key: 'profile', title: 'Bilgilerim', subtitle: 'Profil, e-posta, guvenlik ayarlari ve hesap durumunu yonet.', icon: '👤' },
+    { key: 'activate', title: 'Robot Aktiflestir', subtitle: 'Kutusundan cikan aktivasyon kodu ile robotunu hesabina tanimla.', icon: '🔑' },
   ];
 
   const displayName = user.username ?? 'Kullanıcı';
 
-  function handleLogout() {
-    clearMockSession();
+  async function handleLogout() {
+    try {
+      await logoutFromBackend();
+    } catch {
+      // Token blacklist yapılamazsa bile local oturumu temizle
+    }
+    clearSession();
     navigate('/login');
   }
 
@@ -53,6 +59,8 @@ function UserPage() {
                   navigate('/user/robotlarim');
                 } else if (item.key === 'control') {
                   navigate('/user/kontrol');
+                } else if (item.key === 'activate') {
+                  navigate('/user/robotlarim/tanimla/new');
                 }
               }}
             >
@@ -70,4 +78,3 @@ function UserPage() {
 }
 
 export default UserPage;
-
