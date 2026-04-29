@@ -10,14 +10,22 @@ pydantic[email] → e-posta format doğrulaması için
 
 
 genel mimari:
-[React Frontend :5173]
-        │  /api/* → proxy
-        ▼
-[FastAPI Backend :8080]  ←── app/main.py
-        │  ros_dashboard.py (session, WebSocket, heartbeat)
-        │
-        │  SSH Tüneli
-        ▼
-[Local Makine]
-   ROSBridge :9090
-   Web Video  :8080 (local)
+USER BROWSER (React.js)
+              │
+              │ (HTTP/WebSocket)
+              ▼
+    ┌───────────────────────────┐
+    │      FASTAPI BACKEND      │
+    │  (Uvicorn + PostgreSQL)   │
+    │  - Auth: JWT (python-jose)│
+    │  - DB: SQLAlchemy (ORM)   │
+    └─────────────┬─────────────┘
+                  │
+          [ SSH TUNNEL ]
+                  │
+                  ▼
+    ┌───────────────────────────┐
+    │       LOCAL MACHINE       │
+    │  - ROSBridge (JSON-RPC)   │
+    │  - Camera Stream (MJPEG)  │
+    └───────────────────────────┘
