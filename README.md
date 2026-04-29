@@ -8,7 +8,7 @@ passlib[bcrypt] → şifre hash'lemek için
 python-dotenv → .env dosyasından gizli bilgileri okumak için
 pydantic[email] → e-posta format doğrulaması için
 
-
+'''
 genel mimari:
 USER BROWSER (React.js)
               │
@@ -29,3 +29,4 @@ USER BROWSER (React.js)
     │  - ROSBridge (JSON-RPC)   │
     │  - Camera Stream (MJPEG)  │
     └───────────────────────────┘
+'''
