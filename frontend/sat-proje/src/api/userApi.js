@@ -57,6 +57,14 @@ export function logoutFromBackend() {
   return authFetch('/api/auth/logout', { method: 'POST' });
 }
 
+/** Kullanıcı profil bilgilerini günceller */
+export function updateMyProfile(data) {
+  return authFetch('/api/users/me', {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 // ─── MAĞAZA (PUBLIC) ──────────────────────────────────────────
 
 /** Mağazadaki tüm robot modellerini listeler (auth gerektirmez) */

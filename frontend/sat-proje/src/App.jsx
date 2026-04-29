@@ -3,6 +3,7 @@ import LandingPage from './LandingPage/LandingPage';
 import RegisterPage from './RegisterPage/RegisterPage';
 import LoginPage from './LoginPage/LoginPage';
 import UserPage from './UserPage/UserPage';
+import ProfilePage from './UserPage/ProfilePage';
 import ShopPage from './ShopPage/ShopPage';
 import CartPage from './CartPage/CartPage';
 import CheckoutPage from './CheckoutPage/CheckoutPage';
@@ -42,6 +43,14 @@ function App() {
           element={
             <ProtectedRoute>
               <UserPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/user/profil"
+          element={
+            <ProtectedRoute>
+              <ProfilePage />
             </ProtectedRoute>
           }
         />
