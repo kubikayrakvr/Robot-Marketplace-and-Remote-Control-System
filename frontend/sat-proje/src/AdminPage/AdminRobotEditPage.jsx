@@ -45,10 +45,9 @@ function AdminRobotEditPage() {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? Number(value) : value,
+      [name]: type === 'number' ? (value === '' ? '' : Number(value)) : value,
     }));
   };
-
   const handleSelectChange = (e) => {
     setFormData(prev => ({
       ...prev,
@@ -62,13 +61,12 @@ function AdminRobotEditPage() {
     setError(null);
 
     try {
-      await updateRobot(id, {
-        name: formData.name,
-        model_type: formData.model_type,
-        price: Number(formData.price),
-        stock_count: Number(formData.stock_count),
-        is_available: formData.is_available,
-      });
+	await updateRobot(id, {
+	  name: formData.name,
+	  type: formData.model_type,
+	  price: Number(formData.price),
+	  is_available: formData.is_available,
+	});
       navigate(`/admin/robots/bilgi/${id}`);
     } catch (err) {
       setError(err.message);
@@ -140,18 +138,6 @@ function AdminRobotEditPage() {
               onChange={handleChange}
               min="0"
               step="0.01"
-            />
-          </div>
-
-          <div className="admin-form-group">
-            <label htmlFor="robot-stock">Stok Adedi</label>
-            <input
-              id="robot-stock"
-              type="number"
-              name="stock_count"
-              value={formData.stock_count}
-              onChange={handleChange}
-              min="0"
             />
           </div>
 

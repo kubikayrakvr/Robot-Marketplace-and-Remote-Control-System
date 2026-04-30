@@ -1,36 +1,9 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchOrders } from '../api/userApi';
+import { useRobots } from '../context/RobotContext';
 
 function MyRobotsPage() {
   const navigate = useNavigate();
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchOrders()
-      .then((data) => {
-        setOrders(data);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, []);
-
-  // Siparişlerden robot ürünlerini çıkar
-  const purchasedItems = orders.flatMap((order) =>
-    (order.items || []).map((item) => ({
-      orderId: order.id,
-      productId: item.product_id,
-      productName: item.product_name,
-      quantity: item.quantity,
-      orderDate: order.created_at,
-      status: order.status,
-    }))
-  );
+  const { ownedRobots, loading } = useRobots();
 
   return (
     <div className="user-page">
@@ -38,73 +11,48 @@ function MyRobotsPage() {
         <header className="user-header">
           <div className="user-welcome">
             <p className="user-eyebrow">Envanter</p>
-            <h1>Robotlarim</h1>
+            <h1>Robotlarım</h1>
             <p className="user-subtitle">
-              Satin aldiginiz robotlari goruntuleyin ve aktivasyon kodu ile aktiflestirin.
+              Satın aldığınız robotları görüntüleyin.
             </p>
           </div>
           <div className="user-meta">
-            <button
-              type="button"
-              className="primary-button"
-              onClick={() => navigate('/user/robotlarim/tanimla/new')}
-            >
-              🤖 Robot Aktiflestir
-            </button>
-            <button
-              type="button"
-              className="secondary-button"
-              onClick={() => navigate('/user')}
-            >
-              Panele Don
+            <button type="button" className="secondary-button" onClick={() => navigate('/user')}>
+              Panele Dön
             </button>
           </div>
         </header>
 
         <section className="inventory-content">
           {loading ? (
-            <div className="empty-cart">
-              <div className="empty-icon">⏳</div>
-              <h2>Yukleniyor...</h2>
-            </div>
-          ) : error ? (
-            <div className="empty-cart">
-              <div className="empty-icon">❌</div>
-              <h2>Hata</h2>
-              <p>{error}</p>
-            </div>
-          ) : purchasedItems.length === 0 ? (
+            <div className="empty-cart"><div className="empty-icon">⏳</div><h2>Yükleniyor...</h2></div>
+          ) : ownedRobots.length === 0 ? (
             <div className="empty-cart">
               <div className="empty-icon">📦</div>
-              <h2>Henuz hic siparisiniz yok.</h2>
-              <p>Magazaya giderek ilk robotunuzu satin alabilirsiniz.</p>
-              <button
-                type="button"
-                className="primary-button"
-                onClick={() => navigate('/user/shop')}
-              >
-                Magazaya Git
+              <h2>Henüz hiç robotunuz yok.</h2>
+              <button type="button" className="primary-button" onClick={() => navigate('/user/shop')}>
+                Mağazaya Git
               </button>
             </div>
           ) : (
             <div className="robots-grid">
-              {purchasedItems.map((item, index) => (
+              {ownedRobots.map((robot) => (
                 <div
-                  key={`${item.orderId}-${item.productId}-${index}`}
-                  className="inventory-card status-active"
-                  onClick={() => navigate('/user/robotlarim/tanimla/new')}
+                  key={robot.instanceId}
+                  className={`inventory-card status-${robot.status}`}
+                  onClick={() => navigate(`/user/robotlarim/bilgi/${robot.instanceId}`)}
                 >
-                  <div className="inventory-icon">🤖</div>
+                  <div className="inventory-icon">{robot.icon || '🤖'}</div>
                   <div className="inventory-details">
-                    <h3>{item.productName}</h3>
+                    <h3>{robot.nickname || robot.name}</h3>
                     <p className="inventory-badge">
-                      Adet: {item.quantity} · Siparis #{item.orderId}
+                      {robot.status === 'active' ? '✅ Aktif' : '⏳ Pasif'}
                     </p>
                     <p style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '4px' }}>
-                      {new Date(item.orderDate).toLocaleDateString('tr-TR')}
+                      {robot.serialNumber}
                     </p>
                   </div>
-                  <div className="inventory-action">Aktiflestir ➔</div>
+                  <div className="inventory-action">Görüntüle ➔</div>
                 </div>
               ))}
             </div>

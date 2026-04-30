@@ -1,44 +1,78 @@
-import { createContext, useContext, useState } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback } from 'react';
 
 const RobotContext = createContext();
+const API = 'http://49.13.13.48:8000';
+
+function getAuthHeaders() {
+  const raw = localStorage.getItem('satproje.session');
+  const token = raw ? JSON.parse(raw)?.token : null;
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
 
 export function RobotProvider({ children }) {
   const [ownedRobots, setOwnedRobots] = useState([]);
+  const [loading, setLoading] = useState(false);
 
-  // Sepetteki urunleri envantere ekle
-  const addPurchasedRobots = (cartItems) => {
-    const newRobots = [];
-    cartItems.forEach((item) => {
-      // Eger ayni urunden 2 tane almissa, 2 ayri instance olusturuyoruz
-      for (let i = 0; i < item.quantity; i++) {
-        newRobots.push({
-          instanceId: `${item.id}-${Date.now()}-${i}`,
-          modelId: item.id,
-          name: item.name,
-          icon: item.icon,
-          description: item.description,
-          status: 'inactive', // inactive = red (onaysiz), active = green (onayli)
-          serialNumber: null,
-          purchaseDate: new Date().toISOString(),
+const fetchMyRobots = useCallback(async (overrideToken = null) => {
+    setLoading(true);
+    try {
+      const raw = localStorage.getItem('satproje.session');
+      const token = overrideToken || (raw ? JSON.parse(raw)?.token : null);
+      if (!token) { setOwnedRobots([]); return; }
+
+      const res = await fetch(`${API}/api/user-robots/`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (res.status === 401 || res.status === 403) { setOwnedRobots([]); return; }
+      if (!res.ok) return;
+      const data = await res.json();
+      setOwnedRobots(data);
+    } catch (e) {
+      console.error('Robotlar yüklenemedi:', e);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  // f5 atınca robotlar gelsin diye
+  useEffect(() => {
+    const raw = localStorage.getItem('satproje.session');
+    const token = raw ? JSON.parse(raw)?.token : null;
+    if (token) {
+      fetchMyRobots(token);
+    }
+  }, []);
+
+  const addPurchasedRobots = useCallback(async () => {
+    await fetchMyRobots();
+  }, [fetchMyRobots]);
+
+  const activateRobot = useCallback(async (instanceId, activationCode, nickname) => {
+    try {
+      const res = await fetch(
+        `${API}/api/user-robots/tanimla?code=${encodeURIComponent(activationCode)}&nickname=${encodeURIComponent(nickname || activationCode)}`,
+        { method: 'POST', headers: getAuthHeaders() }
+      );
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || 'Aktivasyon başarısız');
+      }
+      const data = await res.json();
+      if (data.robot) {
+        setOwnedRobots((prev) => {
+          const exists = prev.find((r) => r.instanceId === data.robot.instanceId);
+          if (exists) return prev.map((r) => r.instanceId === data.robot.instanceId ? data.robot : r);
+          return [...prev, data.robot];
         });
       }
-    });
-    setOwnedRobots((prev) => [...prev, ...newRobots]);
-  };
-
-  // Robotu seri no ile aktiflestir
-  const activateRobot = (instanceId, serialNumber) => {
-    setOwnedRobots((prev) =>
-      prev.map((robot) =>
-        robot.instanceId === instanceId
-          ? { ...robot, status: 'active', serialNumber }
-          : robot
-      )
-    );
-  };
+      return { success: true, message: data.message };
+    } catch (e) {
+      return { success: false, message: e.message };
+    }
+  }, []);
 
   return (
-    <RobotContext.Provider value={{ ownedRobots, addPurchasedRobots, activateRobot }}>
+    <RobotContext.Provider value={{ ownedRobots, addPurchasedRobots, activateRobot, fetchMyRobots, loading }}>
       {children}
     </RobotContext.Provider>
   );
@@ -46,8 +80,6 @@ export function RobotProvider({ children }) {
 
 export function useRobots() {
   const context = useContext(RobotContext);
-  if (!context) {
-    throw new Error('useRobots must be used within a RobotProvider');
-  }
+  if (!context) throw new Error('useRobots must be used within a RobotProvider');
   return context;
 }

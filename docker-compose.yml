@@ -26,6 +26,10 @@ services:
     container_name: sat0_frontend
     ports:
       - "5173:5173"
+    volumes:
+      - ./frontend/sat-proje/src:/app/src          # ← kaynak kod
+      - ./frontend/sat-proje/public:/app/public    # ← public dosyalar
+      - /app/node_modules                          # ← node_modules'ü override etme!
     depends_on:
       - app
     restart: always

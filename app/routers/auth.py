@@ -2,6 +2,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
+from app.models.audit import AuditLog
 from app.database import get_db
 from app.models.user import User
 from app.schemas.user import UserRegister, UserResponse, UserLogin
@@ -33,8 +34,16 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
 def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
     if not user or not verify_password(data.password, user.hashed_password):
+        log = AuditLog(
+            user_id=user.id if user else None,
+            action="LOGIN_FAILED",
+            ip_address=request.client.host,
+            details={"email": data.email, "reason": "Hatalı şifre veya e-posta"}
+        )
+        db.add(log)
+        db.commit()
         raise HTTPException(status_code=401, detail="Hatalı bilgiler")
-    
+
     access_token = create_token(data={"sub": str(user.id)}, token_type="access")
     refresh_token = create_token(data={"sub": str(user.id)}, token_type="refresh")
     
@@ -77,7 +86,7 @@ def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session =
 
 @router.post("/reset-password")
 def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    payload = decode_token(data.reset_token)
+    payload = decode_token(data.token)
     if not payload or payload.get("type") != "password_reset":
         raise HTTPException(status_code=400, detail="Geçersiz veya süresi dolmuş sıfırlama token'ı")
     

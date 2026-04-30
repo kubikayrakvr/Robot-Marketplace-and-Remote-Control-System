@@ -19,7 +19,6 @@ function LoginPage() {
     const password = formData.get('password');
 
     try {
-      // 1) Login – get access_token
       const loginRes = await fetch(`${API_URL}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -41,7 +40,6 @@ function LoginPage() {
 
       const { access_token } = await loginRes.json();
 
-      // 2) Fetch user info with the token
       const meRes = await fetch(`${API_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${access_token}` },
       });
@@ -50,11 +48,8 @@ function LoginPage() {
         throw new Error('Kullanıcı bilgileri alınamadı');
       }
 
-      const user = await meRes.json(); // { id, email, username, is_admin }
-
-      // 3) Save session
+      const user = await meRes.json();
       saveSession({ access_token, user });
-
       navigate('/user');
     } catch (err) {
       console.error(err);
@@ -95,10 +90,16 @@ function LoginPage() {
             Şifre
             <input type="password" name="password" autoComplete="current-password" required />
           </label>
+          <div style={{ textAlign: 'right', marginBottom: '8px' }}>
+            <Link to="/forgot-password" style={{ fontSize: '0.85rem', color: '#60a5fa' }}>
+              Şifremi unuttum
+            </Link>
+          </div>
           <button type="submit" className="primary-button full-width" disabled={loading}>
             {loading ? 'Giriş yapılıyor...' : 'Giriş yap'}
           </button>
         </form>
+
         <div style={{ marginTop: '1.5rem', textAlign: 'center', borderTop: '1px solid rgba(148, 163, 184, 0.2)', paddingTop: '1rem' }}>
           <p style={{ margin: '0 0 10px', fontSize: '0.8rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Yönetici misiniz?</p>
           <Link to="/admin/login" className="secondary-button" style={{ display: 'inline-flex', alignItems: 'center', gap: '8px' }}>

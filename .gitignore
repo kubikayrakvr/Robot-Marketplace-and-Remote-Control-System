@@ -12,3 +12,9 @@ log/
 # IDE settings
 .vscode/
 .idea/
+__pycache__/
+*.pyc
+.env
+*.pem
+cookies.txt
+node_modules/

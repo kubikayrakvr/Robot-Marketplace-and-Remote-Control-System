@@ -1,7 +1,25 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useRobots } from '../context/RobotContext';
 
 function RobotInfoPage() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const { ownedRobots } = useRobots();
+
+  const robot = ownedRobots.find((r) => r.instanceId === id);
+
+  if (!robot) {
+    return (
+      <div className="user-page">
+        <div className="user-shell">
+          <h2>Robot bulunamadı.</h2>
+          <button className="secondary-button" onClick={() => navigate('/user/robotlarim')}>
+            Geri Dön
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="user-page">
@@ -9,10 +27,8 @@ function RobotInfoPage() {
         <header className="user-header">
           <div className="user-welcome">
             <p className="user-eyebrow">Durum Paneli</p>
-            <h1>Robot Durumu</h1>
-            <p className="user-subtitle">
-              Robot durum bilgileri, ROS/Gazebo entegrasyonu tamamlandiginda burada gosterilecektir.
-            </p>
+            <h1>{robot.nickname || robot.name}</h1>
+            <p className="user-subtitle">{robot.description}</p>
           </div>
           <div className="user-meta">
             <button
@@ -20,31 +36,55 @@ function RobotInfoPage() {
               className="secondary-button"
               onClick={() => navigate('/user/robotlarim')}
             >
-              Robotlara Don
+              Robotlara Dön
             </button>
           </div>
         </header>
 
         <section className="robot-info-content">
           <div className="info-card">
-            <div className="info-icon">🤖</div>
+            <div className="info-icon">{robot.icon || '🤖'}</div>
             <div className="info-stats">
               <div className="stat-box">
                 <span className="stat-label">Durum</span>
-                <span className="stat-value">Bekleniyor</span>
+                <span className="stat-value">{robot.status === 'active' ? '✅ Aktif' : '⏳ Pasif'}</span>
               </div>
               <div className="stat-box">
-                <span className="stat-label">Baglanti</span>
-                <span className="stat-value">Cevrimdisi</span>
+                <span className="stat-label">Seri No</span>
+                <span className="stat-value">{robot.serialNumber}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Aktivasyon Kodu</span>
+                <span className="stat-value" style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                  {robot.activationCode || '—'}
+                </span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">ROS ID</span>
+                <span className="stat-value">{robot.rosRobotId || 'Tanımlanmadı'}</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Garanti Süresi</span>
+                <span className="stat-value">{robot.warrantyMonths || 24} Ay</span>
+              </div>
+              <div className="stat-box">
+                <span className="stat-label">Garanti Bitiş</span>
+                <span className="stat-value">
+                  {robot.warrantyEnd
+                    ? new Date(robot.warrantyEnd).toLocaleDateString('tr-TR')
+                    : '—'}
+                </span>
               </div>
             </div>
-            <p className="info-desc">
-              Robotunuzun detayli durum bilgisi, Gazebo simulasyon sunucusu ve ROS 2 entegrasyonu tamamlandiginda burada canli olarak goruntulenecektir.
-            </p>
             <div className="info-actions">
-              <button className="primary-button" onClick={() => navigate('/user/kontrol')}>
-                Kontrol Paneline Git
-              </button>
+              {robot.rosRobotId && (
+                <button
+                  className="primary-button"
+                  onClick={() => navigate(`/user/kontrol/${robot.instanceId}`)}
+                >
+                  Kontrol Paneline Git
+                </button>
+              )}
             </div>
           </div>
         </section>

@@ -12,6 +12,10 @@ class RobotCatalog(Base):
     type = Column(String)
     price = Column(Float, nullable=False)
     description = Column(String)
+    stock_count = Column(Integer, default=0)
+    is_available = Column(Boolean, default=True)
+    warranty_months = Column(Integer, default=24)
+    ros_namespace = Column(String, nullable=True)
 
     # Katalogdan üretilen tüm fiziksel envanterleri bulmamızı sağlar
     inventories = relationship("RobotInventory", back_populates="catalog")

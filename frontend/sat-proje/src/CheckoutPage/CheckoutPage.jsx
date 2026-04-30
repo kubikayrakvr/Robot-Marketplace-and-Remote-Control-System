@@ -1,15 +1,17 @@
+import { useRobots } from '../context/RobotContext';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCart } from '../context/CartContext';
 import { createOrder } from '../api/userApi';
 
 function CheckoutPage() {
+  const { fetchMyRobots } = useRobots();
   const navigate = useNavigate();
   const { cartItems, cartTotal, refreshCart } = useCart();
   const [isSuccess, setIsSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-
+  
   useEffect(() => {
     refreshCart();
   }, [refreshCart]);
@@ -24,6 +26,7 @@ function CheckoutPage() {
 
     try {
       await createOrder(address);
+      await fetchMyRobots();
       setIsSuccess(true);
     } catch (err) {
       setError(err.message || 'Sipariş oluşturulamadı');
@@ -42,7 +45,7 @@ function CheckoutPage() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => navigate('/user')}
+	    onClick={() => navigate('/user/robotlarim')}
           >
             Panele Don
           </button>

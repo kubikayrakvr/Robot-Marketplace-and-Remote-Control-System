@@ -2,9 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, joinedload
 from app.database import get_db
 from app.models.user import User
-from app.models.robot import RobotCatalog, RobotInventory
+from app.models.robot import RobotCatalog, RobotInventory, UserRobot
 from app.models.shop import CartItem, Order, OrderItem, OrderStatus
-from app.models.audit import AuditLog # 🛡️ DOĞRU IMPORT
+from app.models.audit import AuditLog
 from app.schemas.order import OrderCreate, OrderResponse
 from app.core.dependencies import get_current_user
 from app.core.limiter import limiter
@@ -13,7 +13,8 @@ from decimal import Decimal
 
 router = APIRouter(prefix="/api/orders", tags=["orders"])
 
-@router.post("/", response_model=OrderResponse)
+
+@router.post("/")
 @limiter.limit("3/minute")
 def create_order(
     request: Request,
@@ -41,6 +42,7 @@ def create_order(
             if Decimal(ci.unit_price) != Decimal(product.price):
                 raise HTTPException(status_code=400, detail=f"Fiyat değişti: {product.name}")
 
+            # Henüz satılmamış (is_activated=False) envanter ürünlerini al
             inventory_items = db.query(RobotInventory).filter(
                 RobotInventory.catalog_id == product.id,
                 RobotInventory.is_activated == False
@@ -50,29 +52,56 @@ def create_order(
                 raise HTTPException(status_code=400, detail=f"{product.name} için yeterli stok yok")
 
             total_amount += Decimal(ci.unit_price) * ci.quantity
-            order_items_to_create.append({"ci": ci, "product": product, "inv": inventory_items})
+            order_items_to_create.append({
+                "ci": ci,
+                "product": product,
+                "inv": inventory_items
+            })
 
-        new_order = Order(user_id=current_user.id, total_amount=total_amount, status=OrderStatus.PAID)
+        # Siparişi oluştur
+        new_order = Order(
+            user_id=current_user.id,
+            total_amount=total_amount,
+            status=OrderStatus.PAID
+        )
         db.add(new_order)
         db.flush()
 
         for item in order_items_to_create:
-            oi = OrderItem(order_id=new_order.id, product_id=item["product"].id, quantity=item["ci"].quantity, unit_price=item["ci"].unit_price)
+            # Sipariş kalemi
+            oi = OrderItem(
+                order_id=new_order.id,
+                product_id=item["product"].id,
+                quantity=item["ci"].quantity,
+                unit_price=item["ci"].unit_price
+            )
             db.add(oi)
+
+            # Stok düş
             item["product"].stock_count -= item["ci"].quantity
+
+            # Her envanter ürünü için:
+            # - is_activated = True (satıldı, başkası alamaz)
+            # - UserRobot kaydı oluştur (kullanıcının envanterinde görünsün)
             for inv in item["inv"]:
                 inv.is_activated = True
 
+                user_robot = UserRobot(
+                    user_id=current_user.id,
+                    inventory_id=inv.id,
+                    nickname=item["product"].name,  # Varsayılan takma ad
+                )
+                db.add(user_robot)
+
+        # Sepeti temizle
         db.query(CartItem).filter(CartItem.user_id == current_user.id).delete()
-        
-        # 🛡️ AUDIT LOG
+
+        # Audit log
         log = AuditLog(
             user_id=current_user.id,
             action="ORDER_CREATED",
-            target_type="order",
-            target_id=new_order.id,
             ip_address=request.client.host,
-            details=f"Total: {total_amount}"
+            details={"order_id": new_order.id, "total": str(total_amount)}
         )
         db.add(log)
 
@@ -84,14 +113,41 @@ def create_order(
         db.rollback()
         raise e
 
-@router.get("/", response_model=List[OrderResponse])
+
+@router.get("/")
 def get_my_orders(request: Request, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    return db.query(Order).options(joinedload(Order.items)).filter(
+    orders = db.query(Order).options(joinedload(Order.items)).filter(
         Order.user_id == current_user.id
     ).order_by(Order.created_at.desc()).all()
 
+    result = []
+    for order in orders:
+        items = []
+        for item in order.items:
+            product = db.query(RobotCatalog).filter(RobotCatalog.id == item.product_id).first()
+            items.append({
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "unit_price": float(item.unit_price),
+                "product_name": product.name if product else "Bilinmeyen",
+                "subtotal": float(item.unit_price) * item.quantity,
+            })
+        result.append({
+            "id": order.id,
+            "total_amount": float(order.total_amount),
+            "status": order.status.value,
+            "created_at": order.created_at.isoformat(),
+            "items": items,
+        })
+    return result
+
 @router.get("/{id}", response_model=OrderResponse)
-def get_order_detail(request: Request, id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def get_order_detail(
+    request: Request,
+    id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db)
+):
     order = db.query(Order).options(joinedload(Order.items)).filter(
         Order.id == id,
         Order.user_id == current_user.id

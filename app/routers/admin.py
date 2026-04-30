@@ -144,12 +144,18 @@ def generate_inventory_units(
         db.add(new_unit)
         generated_units.append(new_unit)
 
+    # stock_count'u güncelle
+    catalog_item.stock_count = db.query(RobotInventory).filter(
+        RobotInventory.catalog_id == data.model_id,
+        RobotInventory.is_activated == False
+    ).count()
+
     db.commit()
     for unit in generated_units:
         db.refresh(unit)
     return generated_units
 
-# --- SİSTEM LOGLARI ---
+    # --- SİSTEM LOGLARI ---
 
 @router.get("/log")
 def get_audit_logs(
