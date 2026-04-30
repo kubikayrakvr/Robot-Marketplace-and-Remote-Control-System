@@ -4,12 +4,14 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.user import User
 from app.models.robot import RobotCatalog, RobotInventory
+from app.models.report import UserReport
 from app.models.audit import AuditLog
 from app.schemas.user import UserResponse, UserUpdate
 from app.schemas.robot import (
     RobotCreate, RobotResponse, RobotUpdate, 
     PhysicalRobotCreate, PhysicalRobotUnitResponse
 )
+from app.schemas.report import ReportResponse
 from app.core.dependencies import get_current_admin
 from pydantic import BaseModel
 
@@ -167,3 +169,44 @@ def get_audit_logs(
 ):
     """Sistemdeki tüm kullanıcı hareketlerini (aktivasyon, login vb.) listeler"""
     return db.query(AuditLog).order_by(AuditLog.timestamp.desc()).limit(limit).all()
+
+# --- RAPOR YÖNETİMİ ---
+
+@router.get("/reports", response_model=list[ReportResponse])
+def list_reports(
+    resolved: bool | None = None,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Kullanıcılardan gelen raporları listeler"""
+    query = db.query(UserReport)
+    if resolved is not None:
+        query = query.filter(UserReport.is_resolved == resolved)
+    
+    reports = query.order_by(UserReport.created_at.desc()).all()
+    
+    # Username bilgisini ekle
+    for r in reports:
+        r.username = r.user.username
+        
+    return reports
+
+@router.patch("/reports/coz/{report_id}", response_model=ReportResponse)
+def resolve_report(
+    report_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin),
+):
+    """Bir raporu çözüldü olarak işaretler"""
+    report = db.query(UserReport).filter(UserReport.id == report_id).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Rapor bulunamadı")
+    
+    report.is_resolved = True
+    from datetime import datetime, timezone
+    report.resolved_at = datetime.now(timezone.utc)
+    
+    db.commit()
+    db.refresh(report)
+    report.username = report.user.username
+    return report

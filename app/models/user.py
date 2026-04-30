@@ -9,6 +9,8 @@ class User(Base):
     username        = Column(String, unique=True, index=True, nullable=False)
     email           = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
+    security_question = Column(String, nullable=True) # Eski kullanıcılar için nullable
+    security_answer = Column(String, nullable=True)   # Hashed answer
 
     is_active  = Column(Boolean, default=True)
     is_admin   = Column(Boolean, default=False) # 🛡️ Admin ayrımını yapan o kritik alan!

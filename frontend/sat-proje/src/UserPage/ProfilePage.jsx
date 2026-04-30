@@ -13,6 +13,8 @@ function ProfilePage() {
     email: user.email || '',
     old_password: '',
     new_password: '',
+    security_question: user.security_question || 'İlk evcil hayvanınızın adı nedir?',
+    security_answer: '',
   });
 
   const [loading, setLoading] = useState(false);
@@ -38,6 +40,10 @@ function ProfilePage() {
     if (formData.new_password) {
       dataToUpdate.new_password = formData.new_password;
       dataToUpdate.old_password = formData.old_password;
+    }
+    if (formData.security_answer) {
+      dataToUpdate.security_question = formData.security_question;
+      dataToUpdate.security_answer = formData.security_answer;
     }
 
     if (Object.keys(dataToUpdate).length === 0) {
@@ -66,8 +72,8 @@ function ProfilePage() {
       }
 
       setSuccess('Profil bilgileriniz basariyla guncellendi.');
-      // Clear password fields
-      setFormData((prev) => ({ ...prev, old_password: '', new_password: '' }));
+      // Clear sensitive fields
+      setFormData((prev) => ({ ...prev, old_password: '', new_password: '', security_answer: '' }));
 
       // If email changed, they might be logged out or need re-login, handle gracefully
       if (dataToUpdate.email) {
@@ -180,6 +186,39 @@ function ProfilePage() {
                   onChange={handleChange}
                   placeholder="En az 6 karakter"
                   minLength={6}
+                />
+              </label>
+
+              <div style={{ margin: '24px 0 16px', borderBottom: '1px solid rgba(148, 163, 184, 0.2)' }}></div>
+              <h4 style={{ margin: '0 0 8px', color: '#e2e8f0' }}>Güvenlik Sorusu</h4>
+              <p style={{ color: '#94a3b8', fontSize: '0.8rem', marginBottom: '16px' }}>
+                Şifrenizi unuttuğunuzda hesabınızı kurtarmak için kullanılır.
+              </p>
+
+              <label>
+                Soru Seçin
+                <select 
+                  name="security_question" 
+                  value={formData.security_question} 
+                  onChange={handleChange}
+                  style={{ width: '100%', padding: '0.75rem', borderRadius: '0.5rem', background: '#020617', border: '1px solid #1e293b', color: '#fff', marginBottom: '1rem' }}
+                >
+                  <option value="İlk evcil hayvanınızın adı nedir?">İlk evcil hayvanınızın adı nedir?</option>
+                  <option value="Annenizin kızlık soyadı nedir?">Annenizin kızlık soyadı nedir?</option>
+                  <option value="Hangi şehirde doğdunuz?">Hangi şehirde doğdunuz?</option>
+                  <option value="En sevdiğiniz çocukluk arkadaşınızın adı nedir?">En sevdiğiniz çocukluk arkadaşınızın adı nedir?</option>
+                  <option value="İlk okulunuzun adı nedir?">İlk okulunuzun adı nedir?</option>
+                </select>
+              </label>
+
+              <label>
+                Cevap
+                <input
+                  type="text"
+                  name="security_answer"
+                  value={formData.security_answer}
+                  onChange={handleChange}
+                  placeholder={user.security_question ? "Degistirmek için yeni cevap girin" : "Güvenlik cevabınızı girin"}
                 />
               </label>
 

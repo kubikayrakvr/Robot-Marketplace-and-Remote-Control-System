@@ -1,12 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
-from app.routers import auth, users, admin, robots, user_robot, cart, orders
+from app.routers import auth, users, admin, robots, user_robot, cart, orders, reports
 from app.routers import ros_dashboard  # ← eklendi
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from app.core.limiter import limiter
-from app.models import user, robot, audit, shop
+from app.models import user, robot, audit, shop, report
 import asyncio
 
 # Veritabanı tablolarını oluştur
@@ -39,6 +39,7 @@ app.include_router(robots.router)
 app.include_router(user_robot.router)
 app.include_router(cart.router)
 app.include_router(orders.router)
+app.include_router(reports.router)
 app.include_router(ros_dashboard.router)  # ← eklendi
 
 @app.on_event("startup")

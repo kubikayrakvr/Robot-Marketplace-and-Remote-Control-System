@@ -120,13 +120,18 @@ function AdminRobotEditPage() {
 
           <div className="admin-form-group">
             <label htmlFor="robot-model">Model Tipi</label>
-            <input
+            <select
               id="robot-model"
-              type="text"
               name="model_type"
               value={formData.model_type}
               onChange={handleChange}
-            />
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#020617', border: '1px solid #334155', color: '#e5e7eb' }}
+            >
+              <option value="AquaDrone v70">AquaDrone v70</option>
+              <option value="AeroBot X1">AeroBot X1</option>
+              <option value="TerraCrawler V2">TerraCrawler V2</option>
+              <option value="Sentinel Biped">Sentinel Biped</option>
+            </select>
           </div>
 
           <div className="admin-form-group">

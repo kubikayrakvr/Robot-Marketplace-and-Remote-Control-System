@@ -38,6 +38,13 @@ function AdminLayout({ children }) {
             <span className="nav-icon">👥</span>
             Kullanıcılar
           </Link>
+          <Link
+            to="/admin/raporlar"
+            className={`admin-nav-link ${isActive('/admin/raporlar') ? 'active' : ''}`}
+          >
+            <span className="nav-icon">📩</span>
+            Raporlar
+          </Link>
 
           <div className="admin-nav-spacer" />
 

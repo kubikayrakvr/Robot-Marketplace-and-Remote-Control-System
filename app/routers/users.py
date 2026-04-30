@@ -50,6 +50,11 @@ def update_my_profile(
         
         current_user.hashed_password = hash_password(data.new_password)
 
+    # 4. Güvenlik Sorusu Güncelleme
+    if data.security_question and data.security_answer:
+        current_user.security_question = data.security_question
+        current_user.security_answer = hash_password(data.security_answer.lower().strip())
+
     db.commit()
     db.refresh(current_user)
     return current_user

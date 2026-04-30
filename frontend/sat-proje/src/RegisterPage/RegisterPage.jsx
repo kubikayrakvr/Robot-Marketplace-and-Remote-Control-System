@@ -15,6 +15,8 @@ function RegisterPage() {
     const email = formData.get('email');
     const password = formData.get('password');
     const passwordConfirm = formData.get('passwordConfirm');
+    const securityQuestion = formData.get('securityQuestion');
+    const securityAnswer = formData.get('securityAnswer');
 
     // basit kontrol
     if (password !== passwordConfirm) {
@@ -33,6 +35,8 @@ function RegisterPage() {
           email: email,
           username: fullName, // backend username istiyor
           password: password,
+          security_question: securityQuestion,
+          security_answer: securityAnswer,
         }),
       });
 

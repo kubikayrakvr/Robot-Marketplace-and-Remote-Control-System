@@ -180,3 +180,21 @@ export function generateInventory(data) {
 export function fetchAuditLogs(limit = 100) {
   return adminFetch(`/api/admin/log?limit=${limit}`);
 }
+
+// ─── RAPOR YÖNETİMİ ──────────────────────────────────────────
+
+/** Raporları listeler (resolved: true/false/null) */
+export function fetchAdminReports(resolved = null) {
+  let url = '/api/admin/reports';
+  if (resolved !== null) {
+    url += `?resolved=${resolved}`;
+  }
+  return adminFetch(url);
+}
+
+/** Bir raporu çözüldü olarak işaretler */
+export function resolveReport(reportId) {
+  return adminFetch(`/api/admin/reports/coz/${reportId}`, {
+    method: 'PATCH',
+  });
+}

@@ -154,3 +154,18 @@ export function resetPassword(token, newPassword) {
 export function fetchOrderById(orderId) {
   return authFetch(`/api/orders/${orderId}`);
 }
+
+// ─── RAPORLAR ───────────────────────────────────────────────
+
+/** Yeni bir rapor oluşturur */
+export function createReport(data) {
+  return authFetch('/api/reports/', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+/** Kullanıcının kendi raporlarını getirir */
+export function fetchMyReports() {
+  return authFetch('/api/reports/my-reports');
+}

@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 from app.models.audit import AuditLog
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserRegister, UserResponse, UserLogin
+from app.schemas.user import UserRegister, UserResponse, UserLogin, SecurityResetConfirm
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, TokenRefreshRequest
 from app.schemas.token import Token
 from app.core.security import hash_password, verify_password, create_token, decode_token
@@ -22,7 +22,9 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         email=data.email,
         username=data.username,
-        hashed_password=hash_password(data.password)
+        hashed_password=hash_password(data.password),
+        security_question=data.security_question,
+        security_answer=hash_password(data.security_answer.lower().strip()) # Normalize and hash
     )
     db.add(new_user)
     db.commit()
@@ -97,3 +99,27 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
     user.hashed_password = hash_password(data.new_password)
     db.commit()
     return {"message": "Şifreniz başarıyla güncellendi."}
+
+# --- GÜVENLİK SORUSU İLE ŞİFRE SIFIRLAMA ---
+
+@router.get("/security-question/{email}")
+def get_security_question(email: str, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    if not user.security_question:
+        raise HTTPException(status_code=400, detail="Bu kullanıcı için güvenlik sorusu ayarlanmamış. Lütfen destekle iletişime geçin.")
+    return {"security_question": user.security_question}
+
+@router.post("/reset-password-security")
+def reset_password_security(data: SecurityResetConfirm, db: Session = Depends(get_db)):
+    user = db.query(User).filter(User.email == data.email).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+    
+    if not user.security_answer or not verify_password(data.security_answer.lower().strip(), user.security_answer):
+        raise HTTPException(status_code=400, detail="Güvenlik sorusu cevabı hatalı")
+    
+    user.hashed_password = hash_password(data.new_password)
+    db.commit()
+    return {"message": "Şifreniz başarıyla sıfırlandı. Yeni şifrenizle giriş yapabilirsiniz."}

@@ -14,6 +14,7 @@ import ControlSelectionPage from './ControlPage/ControlSelectionPage';
 import ControlPanelPage from './ControlPage/ControlPanelPage';
 import OrdersPage from './UserPage/OrdersPage';
 import OrderDetailsPage from './UserPage/OrderDetailsPage';
+import ReportsPage from './UserPage/ReportsPage';
 import AdminLoginPage from './AdminPage/AdminLoginPage';
 import AdminProtectedRoute from './AdminPage/AdminProtectedRoute';
 import AdminRobotsPage from './AdminPage/AdminRobotsPage';
@@ -22,6 +23,7 @@ import AdminRobotEditPage from './AdminPage/AdminRobotEditPage';
 import AdminRobotAddPage from './AdminPage/AdminRobotAddPage';
 import AdminUsersPage from './AdminPage/AdminUsersPage';
 import AdminUserInfoPage from './AdminPage/AdminUserInfoPage';
+import AdminReportsPage from './AdminPage/AdminReportsPage';
 import { CartProvider } from './context/CartContext';
 import { RobotProvider } from './context/RobotContext';
 import { getSession } from './auth/session';
@@ -141,6 +143,14 @@ function App() {
               </ProtectedRoute>
             }
           />
+          <Route
+            path="/user/raporlar"
+            element={
+              <ProtectedRoute>
+                <ReportsPage />
+              </ProtectedRoute>
+            }
+          />
 
           {/* Admin Routes */}
           <Route path="/admin/login" element={<AdminLoginPage />} />
@@ -183,6 +193,14 @@ function App() {
             element={
               <AdminProtectedRoute>
                 <AdminUsersPage />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/raporlar"
+            element={
+              <AdminProtectedRoute>
+                <AdminReportsPage />
               </AdminProtectedRoute>
             }
           />
