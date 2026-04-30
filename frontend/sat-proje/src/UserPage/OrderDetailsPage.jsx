@@ -73,9 +73,16 @@ function OrderDetailsPage() {
                 <h3 style={{ marginBottom: '1rem' }}>Sipariş Özeti</h3>
                 <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
                   {order.items && order.items.map((item) => (
-                    <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.5rem 0', borderBottom: '1px dashed #444' }}>
-                      <span>{item.quantity}x {item.product?.name || `Ürün #${item.product_id}`}</span>
-                      <span>₺{item.price_at_time.toLocaleString()}</span>
+                    <li key={item.id} style={{ display: 'flex', justifyContent: 'space-between', padding: '0.75rem 0', borderBottom: '1px solid #333' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ color: '#fff', fontWeight: '500' }}>
+                          {item.product_name || `Ürün #${item.product_id}`}
+                        </span>
+                        <span style={{ fontSize: '0.85rem', color: '#94a3b8' }}>{item.quantity} Adet</span>
+                      </div>
+                      <span style={{ color: '#60a5fa', fontWeight: '600' }}>
+                        ₺{((item.unit_price || 0) * (item.quantity || 1)).toLocaleString()}
+                      </span>
                     </li>
                   ))}
                 </ul>

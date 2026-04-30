@@ -56,9 +56,9 @@ function ReportsPage() {
           </button>
         </header>
 
-        <div className="user-grid" style={{ gridTemplateColumns: '1fr 1.5fr' }}>
+        <div className="reports-container" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))', gap: '2rem', marginTop: '2rem' }}>
           {/* Form */}
-          <div className="user-card">
+          <div className="user-card" style={{ height: 'fit-content' }}>
             <h2 style={{ marginBottom: '1.5rem', color: '#fff' }}>Yeni Rapor</h2>
             <form onSubmit={handleSubmit}>
               <div className="form-group" style={{ marginBottom: '1rem' }}>

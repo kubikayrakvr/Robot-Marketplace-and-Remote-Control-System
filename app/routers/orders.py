@@ -151,4 +151,11 @@ def get_order_detail(
     ).first()
     if not order:
         raise HTTPException(status_code=404, detail="Sipariş bulunamadı")
+    
+    # Her bir kalem için ürün adını ve ara toplamı ekle
+    for item in order.items:
+        # Pydantic schema bu alanları bekliyor (OrderItemResponse)
+        item.product_name = item.product.name if item.product else "Bilinmeyen"
+        item.subtotal = item.unit_price * item.quantity
+        
     return order
