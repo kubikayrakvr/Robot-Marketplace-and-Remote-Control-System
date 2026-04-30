@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { saveSession } from '../auth/session';
+import { useRobots } from '../context/RobotContext';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 
@@ -8,6 +9,7 @@ function LoginPage() {
   const navigate = useNavigate();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const { fetchMyRobots } = useRobots();
 
   async function handleSubmit(event) {
     event.preventDefault();
@@ -48,8 +50,9 @@ function LoginPage() {
         throw new Error('Kullanıcı bilgileri alınamadı');
       }
 
-      const user = await meRes.json();
+      const user = await meRes.json();  
       saveSession({ access_token, user });
+      await fetchMyRobots(access_token);
       navigate('/user');
     } catch (err) {
       console.error(err);

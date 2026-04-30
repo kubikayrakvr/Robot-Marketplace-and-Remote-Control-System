@@ -1,5 +1,6 @@
 # app/routers/ros_dashboard.py
 import asyncio
+import json
 import time
 import uuid
 import threading
@@ -10,8 +11,8 @@ from fastapi.responses import StreamingResponse
 import httpx
 
 from app.database import SessionLocal
+from app.models.audit import AuditLog
 from app.models.robot import RobotCatalog
-
 # ── ROS (opsiyonel) ────────────────────────────────────────────────────────────
 try:
     import rclpy
@@ -178,7 +179,21 @@ async def telemetry_ws(websocket: WebSocket, robot_id: str, token: str):
 
     try:
         while True:
-            await websocket.receive_text()
+            data = await websocket.receive_text()
+            # Komut loglama
+            try:
+                msg = json.loads(data)
+                if msg.get("command"):
+                    db = SessionLocal()
+                    log = AuditLog(
+                        action="ROBOT_COMMAND",
+                        details={"robot_id": clean_id, "command": msg["command"]}
+                    )
+                    db.add(log)
+                    db.commit()
+                    db.close()
+            except Exception:
+                pass
             if _sessions.get(clean_id, {}).get("token") != token:
                 break
     except WebSocketDisconnect:
@@ -187,7 +202,6 @@ async def telemetry_ws(websocket: WebSocket, robot_id: str, token: str):
         if _active_ws.get(clean_id) == websocket:
             _active_ws.pop(clean_id, None)
         print(f"[ws] {clean_id!r} bağlantısı kesildi.")
-
 
 # ── Video Stream ───────────────────────────────────────────────────────────────
 

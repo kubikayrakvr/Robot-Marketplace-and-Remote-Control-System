@@ -30,9 +30,10 @@ export function RobotProvider({ children }) {
 
   // f5 atınca robotlar gelsin diye
   useEffect(() => {
-    const token = getAccessToken();
+    const raw = localStorage.getItem('satproje.session');
+    const token = raw ? JSON.parse(raw)?.token : null;
     if (token) {
-      fetchMyRobots();
+      fetchMyRobots(token);
     }
   }, [fetchMyRobots]);
 
