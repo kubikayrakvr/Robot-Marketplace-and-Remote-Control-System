@@ -28,23 +28,23 @@ async function authFetch(endpoint, options = {}) {
 
 /** ROS/Gazebo sistemindeki tüm robotları getirir */
 export function fetchRosRobots() {
-  return authFetch('/api/ros/robots');
+  return authFetch('/ros/robots');
 }
 
 /** Belirli bir robotun detayını getirir */
 export function fetchRosRobotById(robotId) {
-  return authFetch(`/api/ros/robot/${robotId}`);
+  return authFetch(`/ros/robot/${robotId}`);
 }
 
 /** Robotu kontrol etmek için claim eder (oturum başlatır) */
 export function claimRosRobot(robotId) {
-  return authFetch(`/api/ros/robot/${robotId}/claim`, { method: 'POST' });
+  return authFetch(`/ros/robot/${robotId}/claim`, { method: 'POST' });
 }
 
 /** Claim edilmiş robota kalp atışı (heartbeat) gönderir */
 export function heartbeatRosRobot(robotId, sessionToken) {
   const token = getAccessToken();
-  return fetch(`${API_URL}/api/ros/robot/${robotId}/heartbeat`, {
+  return fetch(`${API_URL}/ros/robot/${robotId}/heartbeat`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -63,7 +63,7 @@ export function heartbeatRosRobot(robotId, sessionToken) {
 /** Robot kontrol oturumunu iptal eder (delete) */
 export function deleteClaimRosRobot(robotId, sessionToken) {
   const token = getAccessToken();
-  return fetch(`${API_URL}/api/ros/robot/${robotId}/claim`, {
+  return fetch(`${API_URL}/ros/robot/${robotId}/claim`, {
     method: 'DELETE',
     headers: {
       'Content-Type': 'application/json',
@@ -82,7 +82,7 @@ export function deleteClaimRosRobot(robotId, sessionToken) {
 /** Robot kontrol oturumunu serbest bırakır (post release) */
 export function releaseRosRobot(robotId, sessionToken) {
   const token = getAccessToken();
-  return fetch(`${API_URL}/api/ros/robot/${robotId}/release`, {
+  return fetch(`${API_URL}/ros/robot/${robotId}/release`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -102,10 +102,10 @@ export function releaseRosRobot(robotId, sessionToken) {
 export function getRosWebSocketUrl(robotId, sessionToken) {
   const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = API_URL.replace(/^https?:\/\//, '');
-  return `${wsProtocol}//${host}/api/ros/robot/${robotId}/ws?token=${sessionToken}`;
+  return `${wsProtocol}//${host}/ros/robot/${robotId}/ws?token=${sessionToken}`;
 }
 
 /** Video stream URL'sini döner */
 export function getRosStreamUrl(robotId, sessionToken) {
-  return `${API_URL}/api/ros/robot/${robotId}/stream?token=${sessionToken}`;
+  return `${API_URL}/ros/robot/${robotId}/stream?token=${sessionToken}`;
 }

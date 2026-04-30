@@ -25,6 +25,12 @@ function ControlPanelPage() {
   const wsRef = useRef(null);
   const heartbeatTimer = useRef(null);
 
+  const sendCommand = (command) => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({ command }));
+    }
+  };
+
   useEffect(() => {
     if (!rosRobotId) {
       setError('Bu robot için tanımlı bir ROS ID bulunamadı.');
@@ -46,14 +52,12 @@ function ControlPanelPage() {
         setSessionToken(token);
         setStatus('Bağlandı');
 
-        // Start heartbeat
         heartbeatTimer.current = setInterval(() => {
           heartbeatRosRobot(rosRobotId, token).catch(err => {
             console.error('Heartbeat error', err);
           });
         }, 10000);
 
-        // Connect WebSocket
         const wsUrl = getRosWebSocketUrl(rosRobotId, token);
         wsRef.current = new WebSocket(wsUrl);
 
@@ -102,7 +106,13 @@ function ControlPanelPage() {
         <div style={{ background: '#2a2a2a', padding: '2rem', borderRadius: '12px', textAlign: 'center' }}>
           <h2>Bağlantı Hatası</h2>
           <p>{error}</p>
-          <button className="secondary-button" style={{ marginTop: '1rem' }} onClick={() => navigate('/user/kontrol')}>Geri Dön</button>
+          <button
+            className="secondary-button"
+            style={{ marginTop: '1rem' }}
+            onClick={() => navigate('/user/kontrol')}
+          >
+            Geri Dön
+          </button>
         </div>
       </div>
     );
@@ -112,24 +122,27 @@ function ControlPanelPage() {
     <div className="control-station">
       <header className="control-header">
         <div className="control-title">
-          <button className="back-btn" onClick={() => navigate('/user/kontrol')}>← Ayril</button>
+          <button className="back-btn" onClick={() => navigate('/user/kontrol')}>← Ayrıl</button>
           <h2>{robot?.nickname || robot?.name || 'Robot'} Kontrol Paneli</h2>
         </div>
         <div className={`connection-status ${status === 'Bağlandı' ? 'connected' : 'connecting'}`}>
-          <div className="status-dot" style={{ backgroundColor: status === 'Bağlandı' ? '#4ade80' : '#f59e0b' }}></div>
+          <div
+            className="status-dot"
+            style={{ backgroundColor: status === 'Bağlandı' ? '#4ade80' : '#f59e0b' }}
+          ></div>
           {status}
         </div>
       </header>
 
       <div className="control-grid">
-        {/* Sol Panel: Kamera Akisi */}
+        {/* Sol Panel: Kamera Akışı */}
         <div className="panel camera-panel">
           <div className="panel-header">Ana Kamera (Gazebo)</div>
           <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
             {sessionToken ? (
-              <img 
-                src={getRosStreamUrl(rosRobotId, sessionToken)} 
-                alt="Robot Kamera Akışı" 
+              <img
+                src={getRosStreamUrl(rosRobotId, sessionToken)}
+                alt="Robot Kamera Akışı"
                 style={{ width: '100%', height: '100%', objectFit: 'contain' }}
                 onError={(e) => {
                   e.target.style.display = 'none';
@@ -143,7 +156,7 @@ function ControlPanelPage() {
           </div>
         </div>
 
-        {/* Sag Panel: Telemetri ve Kontrol */}
+        {/* Sağ Panel: Telemetri ve Kontrol */}
         <div className="panel side-panel">
           <div className="panel-section">
             <div className="panel-header">Telemetri Verileri</div>
@@ -164,18 +177,44 @@ function ControlPanelPage() {
           </div>
 
           <div className="panel-section control-section">
-            <div className="panel-header">Manuel Surus (Joystick)</div>
+            <div className="panel-header">Manuel Sürüş (Joystick)</div>
             <div className="joystick-container">
-              <button className="joy-btn joy-up" disabled={status !== 'Bağlandı'}>▲</button>
-              <button className="joy-btn joy-left" disabled={status !== 'Bağlandı'}>◀</button>
+              <button
+                className="joy-btn joy-up"
+                disabled={status !== 'Bağlandı'}
+                onMouseDown={() => sendCommand('FORWARD')}
+                onMouseUp={() => sendCommand('STOP')}
+              >▲</button>
+              <button
+                className="joy-btn joy-left"
+                disabled={status !== 'Bağlandı'}
+                onMouseDown={() => sendCommand('LEFT')}
+                onMouseUp={() => sendCommand('STOP')}
+              >◀</button>
               <div className="joy-center"></div>
-              <button className="joy-btn joy-right" disabled={status !== 'Bağlandı'}>▶</button>
-              <button className="joy-btn joy-down" disabled={status !== 'Bağlandı'}>▼</button>
+              <button
+                className="joy-btn joy-right"
+                disabled={status !== 'Bağlandı'}
+                onMouseDown={() => sendCommand('RIGHT')}
+                onMouseUp={() => sendCommand('STOP')}
+              >▶</button>
+              <button
+                className="joy-btn joy-down"
+                disabled={status !== 'Bağlandı'}
+                onMouseDown={() => sendCommand('BACKWARD')}
+                onMouseUp={() => sendCommand('STOP')}
+              >▼</button>
             </div>
           </div>
 
           <div className="panel-section action-section">
-            <button className="danger-button full-width" disabled={status !== 'Bağlandı'}>ACIL DURDURMA (E-STOP)</button>
+            <button
+              className="danger-button full-width"
+              disabled={status !== 'Bağlandı'}
+              onClick={() => sendCommand('ESTOP')}
+            >
+              ACİL DURDURMA (E-STOP)
+            </button>
           </div>
         </div>
       </div>
