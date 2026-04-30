@@ -164,6 +164,13 @@ export function createRobot(data) {
   });
 }
 
+/** Katalogdaki bir robotu siler */
+export function deleteRobot(robotId) {
+  return adminFetch(`/api/admin/robots/${robotId}`, {
+    method: 'DELETE',
+  });
+}
+
 // ─── ENVANTER ─────────────────────────────────────────────────
 
 /** Fiziksel robot birimleri (envanter) üretir */

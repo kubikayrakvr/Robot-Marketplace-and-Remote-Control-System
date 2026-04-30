@@ -108,30 +108,26 @@ function AdminRobotEditPage() {
       <div className="admin-form-card">
         <form className="admin-form" onSubmit={handleSubmit}>
           <div className="admin-form-group">
-            <label htmlFor="robot-name">Robot Adı</label>
+            <label htmlFor="robot-name">Robot Adı (Sabit)</label>
             <input
               id="robot-name"
               type="text"
               name="name"
               value={formData.name}
-              onChange={handleChange}
+              readOnly
+              style={{ background: '#1e293b', cursor: 'not-allowed' }}
             />
           </div>
 
           <div className="admin-form-group">
-            <label htmlFor="robot-model">Model Tipi</label>
-            <select
+            <label htmlFor="robot-model">Model Tipi (Sabit)</label>
+            <input
               id="robot-model"
-              name="model_type"
+              type="text"
               value={formData.model_type}
-              onChange={handleChange}
-              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#020617', border: '1px solid #334155', color: '#e5e7eb' }}
-            >
-              <option value="AquaDrone v70">AquaDrone v70</option>
-              <option value="AeroBot X1">AeroBot X1</option>
-              <option value="TerraCrawler V2">TerraCrawler V2</option>
-              <option value="Sentinel Biped">Sentinel Biped</option>
-            </select>
+              readOnly
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'not-allowed' }}
+            />
           </div>
 
           <div className="admin-form-group">

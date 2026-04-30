@@ -1,14 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
-import { fetchRobots } from './adminApi';
+import { fetchRobots, deleteRobot } from './adminApi';
 
 function AdminRobotsPage() {
   const [robots, setRobots] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
+  const loadRobots = () => {
+    setLoading(true);
     fetchRobots()
       .then((data) => {
         setRobots(data);
@@ -18,7 +19,21 @@ function AdminRobotsPage() {
         setError(err.message);
         setLoading(false);
       });
+  };
+
+  useEffect(() => {
+    loadRobots();
   }, []);
+
+  const handleDelete = async (id, name) => {
+    if (!window.confirm(`${name} modelini ve tüm envanterini silmek istediğinize emin misiniz?`)) return;
+    try {
+      await deleteRobot(id);
+      loadRobots();
+    } catch (err) {
+      alert('Hata: ' + err.message);
+    }
+  };
 
   const availableCount = robots.filter(r => r.is_available).length;
   const outOfStockCount = robots.filter(r => r.stock_count === 0).length;
@@ -79,9 +94,6 @@ function AdminRobotsPage() {
             <h2>Robot Kataloğu</h2>
             <div className="header-actions">
               <span className="count-badge">{robots.length} model</span>
-              <Link to="/admin/robots/ekle" className="admin-btn save" style={{ marginLeft: '12px', textDecoration: 'none' }}>
-                ➕ Yeni Robot Ekle
-              </Link>
             </div>
           </div>
           <table className="admin-table">
@@ -117,6 +129,13 @@ function AdminRobotsPage() {
                       <Link to={`/admin/robots/duzenle/${robot.id}`} className="admin-btn edit">
                         ✏️ Düzenle
                       </Link>
+                      <button 
+                        onClick={() => handleDelete(robot.id, robot.name)}
+                        className="admin-btn delete"
+                        style={{ background: '#991b1b', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
+                      >
+                        🗑️ Sil
+                      </button>
                     </div>
                   </td>
                 </tr>

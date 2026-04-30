@@ -126,13 +126,13 @@ def update_catalog_item(
     
     if "stock_count" in update_data:
         from app.models.robot import UserRobot
-        current_stock = db.query(RobotInventory).filter(
-            RobotInventory.catalog_id == robot_id,
-            ~RobotInventory.user_robot.has()
-        ).count()
-        diff = update_data["stock_count"] - current_stock
+        # Mevcut toplam (satılmış + satılmamış) envanter sayısı
+        total_current = db.query(RobotInventory).filter(RobotInventory.catalog_id == robot_id).count()
+        new_total = update_data["stock_count"]
+        diff = new_total - total_current
         
         if diff > 0:
+            # Stok artışı: Yeni birimler ekle
             for _ in range(diff):
                 serial_no = f"RBT-{robot.id}-{secrets.token_hex(4)}"
                 activation_key = secrets.token_urlsafe(12)
@@ -143,12 +143,33 @@ def update_catalog_item(
                     is_activated=False
                 ))
         elif diff < 0:
+            # Stok azalışı: Önce satılmamışları, yetmezse satılmışları sil
+            to_delete_count = abs(diff)
+            
+            # 1. Satılmamış (boştaki) robotları bul ve sil
             unsold = db.query(RobotInventory).filter(
                 RobotInventory.catalog_id == robot_id,
                 ~RobotInventory.user_robot.has()
-            ).limit(-diff).all()
+            ).limit(to_delete_count).all()
+            
+            deleted_so_far = len(unsold)
             for u in unsold:
                 db.delete(u)
+            
+            # 2. Eğer hala silinmesi gereken varsa, satılmış (kullanıcıdaki) robotları sil
+            if deleted_so_far < to_delete_count:
+                remaining_to_delete = to_delete_count - deleted_so_far
+                owned = db.query(RobotInventory).filter(
+                    RobotInventory.catalog_id == robot_id,
+                    RobotInventory.user_robot.has()
+                ).limit(remaining_to_delete).all()
+                
+                for o in owned:
+                    # UserRobot kaydı CASCADE ile silinebilir veya manuel silinir
+                    # Modellerde cascade tanımlı değilse manuel silelim
+                    if o.user_robot:
+                        db.delete(o.user_robot)
+                    db.delete(o)
 
     for key, value in update_data.items():
         setattr(robot, key, value)
@@ -210,3 +231,29 @@ def resolve_report(
     db.refresh(report)
     report.username = report.user.username
     return report
+
+# --- ROBOT SİLME ---
+
+@router.delete("/robots/{robot_id}")
+def delete_catalog_item(
+    robot_id: int,
+    db: Session = Depends(get_db),
+    _: User = Depends(get_current_admin)
+):
+    """Bir robot modelini ve ona bağlı tüm envanteri siler"""
+    robot = db.query(RobotCatalog).filter(RobotCatalog.id == robot_id).first()
+    if not robot:
+        raise HTTPException(status_code=404, detail="Robot modeli bulunamadı")
+    
+    # Bağlı envanterleri bul
+    inventories = db.query(RobotInventory).filter(RobotInventory.catalog_id == robot_id).all()
+    
+    # Önce UserRobot'ları sonra envanterleri sil (Manuel cleanup)
+    for inv in inventories:
+        if inv.user_robot:
+            db.delete(inv.user_robot)
+        db.delete(inv)
+        
+    db.delete(robot)
+    db.commit()
+    return {"message": "Robot modeli ve bağlı tüm birimler silindi"}
