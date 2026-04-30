@@ -77,7 +77,12 @@ function AdminRobotsPage() {
         <div className="admin-table-card">
           <div className="admin-table-header">
             <h2>Robot Kataloğu</h2>
-            <span className="count-badge">{robots.length} model</span>
+            <div className="header-actions">
+              <span className="count-badge">{robots.length} model</span>
+              <Link to="/admin/robots/ekle" className="admin-btn save" style={{ marginLeft: '12px', textDecoration: 'none' }}>
+                ➕ Yeni Robot Ekle
+              </Link>
+            </div>
           </div>
           <table className="admin-table">
             <thead>

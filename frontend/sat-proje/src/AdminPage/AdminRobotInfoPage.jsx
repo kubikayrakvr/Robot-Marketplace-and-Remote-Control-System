@@ -9,9 +9,7 @@ function AdminRobotInfoPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
-  const [invQty, setInvQty] = useState(1);
-  const [invLoading, setInvLoading] = useState(false);
-  const [invMsg, setInvMsg] = useState('');
+
 
   useEffect(() => {
     fetchRobots()
@@ -30,18 +28,7 @@ function AdminRobotInfoPage() {
       });
   }, [id]);
 
-  const handleCreateInventory = async () => {
-    setInvLoading(true);
-    setInvMsg('');
-    try {
-      const result = await generateInventory({ model_id: Number(id), quantity: invQty });
-      setInvMsg(`✅ ${result.length} adet envanter oluşturuldu.`);
-    } catch (err) {
-      setInvMsg(`❌ ${err.message}`);
-    } finally {
-      setInvLoading(false);
-    }
-  };
+
 
   if (loading) {
     return (
@@ -122,29 +109,7 @@ function AdminRobotInfoPage() {
           </div>
         </div>
 
-        <div className="admin-detail-card">
-          <h3>📦 Envanter Oluştur</h3>
-          <div className="detail-row">
-            <span className="detail-label">Adet</span>
-            <input
-              type="number"
-              min="1"
-              max="100"
-              value={invQty}
-	      onChange={(e) => setInvQty(e.target.value === '' ? '' : Number(e.target.value))}
-              style={{ width: '80px', padding: '4px 8px', borderRadius: '6px', border: '1px solid #334155' }}
-            />
-          </div>
-          <button
-            className="admin-btn edit"
-            onClick={handleCreateInventory}
-            disabled={invLoading}
-            style={{ marginTop: '12px' }}
-          >
-            {invLoading ? 'Oluşturuluyor...' : '➕ Envanter Oluştur'}
-          </button>
-          {invMsg && <p style={{ marginTop: '8px', fontSize: '0.9rem' }}>{invMsg}</p>}
-        </div>
+
       </div>
     </AdminLayout>
   );

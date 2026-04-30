@@ -1,45 +1,21 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
-import { fetchRobots, updateRobot } from './adminApi';
+import { createRobot } from './adminApi';
 
-function AdminRobotEditPage() {
-  const { id } = useParams();
+function AdminRobotAddPage() {
   const navigate = useNavigate();
 
   const [formData, setFormData] = useState({
     name: '',
-    model_type: '',
+    type: '',
     price: '',
-    stock_count: '',
+    stock_count: 0,
     is_available: true,
+    description: '',
   });
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
-
-  useEffect(() => {
-    fetchRobots()
-      .then((data) => {
-        const found = data.find(r => String(r.id) === String(id));
-        if (!found) {
-          setError('Robot bulunamadı');
-        } else {
-          setFormData({
-            name: found.name,
-            model_type: found.model_type,
-            price: found.price,
-            stock_count: found.stock_count,
-            is_available: found.is_available,
-          });
-        }
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError(err.message);
-        setLoading(false);
-      });
-  }, [id]);
 
   const handleChange = (e) => {
     const { name, value, type } = e.target;
@@ -48,6 +24,7 @@ function AdminRobotEditPage() {
       [name]: type === 'number' ? (value === '' ? '' : Number(value)) : value,
     }));
   };
+
   const handleSelectChange = (e) => {
     setFormData(prev => ({
       ...prev,
@@ -61,42 +38,31 @@ function AdminRobotEditPage() {
     setError(null);
 
     try {
-      await updateRobot(id, {
+      const result = await createRobot({
         name: formData.name,
-        type: formData.model_type,
+        type: formData.type,
         price: Number(formData.price),
         stock_count: Number(formData.stock_count),
         is_available: formData.is_available,
+        description: formData.description,
       });
-      navigate(`/admin/robots/bilgi/${id}`);
+      navigate(`/admin/robots/bilgi/${result.id}`);
     } catch (err) {
       setError(err.message);
       setSaving(false);
     }
   };
 
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="admin-table-card">
-          <div className="admin-loading">Yükleniyor...</div>
-        </div>
-      </AdminLayout>
-    );
-  }
-
   return (
     <AdminLayout>
       <div className="admin-breadcrumb">
         <Link to="/admin/robots">Robotlar</Link>
         <span className="sep">/</span>
-        <Link to={`/admin/robots/bilgi/${id}`}>{formData.name}</Link>
-        <span className="sep">/</span>
-        <span>Düzenle</span>
+        <span>Yeni Robot Ekle</span>
       </div>
 
       <div className="admin-topbar">
-        <h1>Robotu Düzenle</h1>
+        <h1>Yeni Robot Ekle</h1>
       </div>
 
       {error && (
@@ -115,17 +81,20 @@ function AdminRobotEditPage() {
               name="name"
               value={formData.name}
               onChange={handleChange}
+              placeholder="Örn: TurtleBot 3"
+              required
             />
           </div>
 
           <div className="admin-form-group">
-            <label htmlFor="robot-model">Model Tipi</label>
+            <label htmlFor="robot-type">Model Tipi</label>
             <input
-              id="robot-model"
+              id="robot-type"
               type="text"
-              name="model_type"
-              value={formData.model_type}
+              name="type"
+              value={formData.type}
               onChange={handleChange}
+              placeholder="Örn: Mobil Robot"
             />
           </div>
 
@@ -139,12 +108,13 @@ function AdminRobotEditPage() {
               onChange={handleChange}
               min="0"
               step="0.01"
+              placeholder="0.00"
               required
             />
           </div>
 
           <div className="admin-form-group">
-            <label htmlFor="robot-stock">Stok Sayısı (Envanter Otomatik Güncellenir)</label>
+            <label htmlFor="robot-stock">Başlangıç Stok Sayısı</label>
             <input
               id="robot-stock"
               type="number"
@@ -153,6 +123,19 @@ function AdminRobotEditPage() {
               onChange={handleChange}
               min="0"
               required
+            />
+          </div>
+
+          <div className="admin-form-group">
+            <label htmlFor="robot-desc">Açıklama</label>
+            <textarea
+              id="robot-desc"
+              name="description"
+              value={formData.description}
+              onChange={handleChange}
+              placeholder="Robot hakkında kısa bilgi..."
+              rows="4"
+              style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#020617', border: '1px solid #334155', color: '#e5e7eb' }}
             />
           </div>
 
@@ -171,9 +154,9 @@ function AdminRobotEditPage() {
 
           <div className="admin-form-actions">
             <button type="submit" className="admin-btn save" disabled={saving}>
-              {saving ? '⏳ Kaydediliyor...' : '💾 Değişiklikleri Kaydet'}
+              {saving ? '⏳ Ekleniyor...' : '➕ Robotu Ekle'}
             </button>
-            <Link to={`/admin/robots/bilgi/${id}`} className="admin-btn back">
+            <Link to="/admin/robots" className="admin-btn back">
               İptal
             </Link>
           </div>
@@ -183,4 +166,4 @@ function AdminRobotEditPage() {
   );
 }
 
-export default AdminRobotEditPage;
+export default AdminRobotAddPage;

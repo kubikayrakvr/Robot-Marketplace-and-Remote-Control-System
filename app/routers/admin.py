@@ -82,14 +82,28 @@ def create_catalog_item(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    """Mağazaya yeni bir robot modeli ekler"""
+    """Mağazaya yeni bir robot modeli ekler ve stok kadar envanter oluşturur"""
     new_robot = RobotCatalog(
         name=data.name,
-        type=data.model_type,
+        type=data.type,
         price=data.price,
-        description=getattr(data, "description", None)
+        description=getattr(data, "description", None),
+        stock_count=data.stock_count
     )
     db.add(new_robot)
+    db.flush() # ID alabilmek için
+
+    for _ in range(data.stock_count):
+        serial_no = f"RBT-{new_robot.id}-{secrets.token_hex(4)}"
+        activation_key = secrets.token_urlsafe(12)
+        new_unit = RobotInventory(
+            serial_number=serial_no,
+            catalog_id=new_robot.id,
+            activation_code=activation_key,
+            is_activated=False
+        )
+        db.add(new_unit)
+
     db.commit()
     db.refresh(new_robot)
     return new_robot
@@ -107,6 +121,33 @@ def update_catalog_item(
         raise HTTPException(status_code=404, detail="Robot modeli bulunamadı")
 
     update_data = data.model_dump(exclude_unset=True)
+    
+    if "stock_count" in update_data:
+        from app.models.robot import UserRobot
+        current_stock = db.query(RobotInventory).filter(
+            RobotInventory.catalog_id == robot_id,
+            ~RobotInventory.user_robot.has()
+        ).count()
+        diff = update_data["stock_count"] - current_stock
+        
+        if diff > 0:
+            for _ in range(diff):
+                serial_no = f"RBT-{robot.id}-{secrets.token_hex(4)}"
+                activation_key = secrets.token_urlsafe(12)
+                db.add(RobotInventory(
+                    serial_number=serial_no,
+                    catalog_id=robot.id,
+                    activation_code=activation_key,
+                    is_activated=False
+                ))
+        elif diff < 0:
+            unsold = db.query(RobotInventory).filter(
+                RobotInventory.catalog_id == robot_id,
+                ~RobotInventory.user_robot.has()
+            ).limit(-diff).all()
+            for u in unsold:
+                db.delete(u)
+
     for key, value in update_data.items():
         setattr(robot, key, value)
 
@@ -114,46 +155,7 @@ def update_catalog_item(
     db.refresh(robot)
     return robot
 
-# --- ENVANTER VE AKTİVASYON KODU ÜRETİMİ ---
 
-@router.post("/robots/envanter-olustur", response_model=list[PhysicalRobotUnitResponse])
-def generate_inventory_units(
-    data: PhysicalRobotCreate,
-    db: Session = Depends(get_db),
-    _: User = Depends(get_current_admin)
-):
-    """
-    Fabrika çıkışı: Robotlara seri numarası ve kutu üzeri aktivasyon kodu atar.
-    Bu kodlar olmadan kullanıcı robotunu tanımlayamaz.
-    """
-    catalog_item = db.query(RobotCatalog).filter(RobotCatalog.id == data.model_id).first()
-    if not catalog_item:
-        raise HTTPException(status_code=404, detail="Geçersiz katalog ID")
-
-    generated_units = []
-    for _ in range(data.quantity):
-        serial_no = f"RBT-{catalog_item.id}-{secrets.token_hex(4)}"
-        activation_key = secrets.token_urlsafe(12)
-        
-        new_unit = RobotInventory(
-            serial_number=serial_no,
-            catalog_id=catalog_item.id,
-            activation_code=activation_key,
-            is_activated=False
-        )
-        db.add(new_unit)
-        generated_units.append(new_unit)
-
-    # stock_count'u güncelle
-    catalog_item.stock_count = db.query(RobotInventory).filter(
-        RobotInventory.catalog_id == data.model_id,
-        RobotInventory.is_activated == False
-    ).count()
-
-    db.commit()
-    for unit in generated_units:
-        db.refresh(unit)
-    return generated_units
 
     # --- SİSTEM LOGLARI ---
 

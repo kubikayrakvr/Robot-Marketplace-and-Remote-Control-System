@@ -43,9 +43,9 @@ def create_order(
                 raise HTTPException(status_code=400, detail=f"Fiyat değişti: {product.name}")
 
             # Henüz satılmamış (UserRobot kaydı olmayan) envanter ürünlerini al
-            inventory_items = db.query(RobotInventory).outerjoin(UserRobot).filter(
+            inventory_items = db.query(RobotInventory).filter(
                 RobotInventory.catalog_id == product.id,
-                UserRobot.id == None
+                ~RobotInventory.user_robot.has()
             ).limit(ci.quantity).with_for_update().all()
 
             if len(inventory_items) < ci.quantity:

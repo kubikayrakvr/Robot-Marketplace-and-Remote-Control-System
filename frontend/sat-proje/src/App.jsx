@@ -19,6 +19,7 @@ import AdminProtectedRoute from './AdminPage/AdminProtectedRoute';
 import AdminRobotsPage from './AdminPage/AdminRobotsPage';
 import AdminRobotInfoPage from './AdminPage/AdminRobotInfoPage';
 import AdminRobotEditPage from './AdminPage/AdminRobotEditPage';
+import AdminRobotAddPage from './AdminPage/AdminRobotAddPage';
 import AdminUsersPage from './AdminPage/AdminUsersPage';
 import AdminUserInfoPage from './AdminPage/AdminUserInfoPage';
 import { CartProvider } from './context/CartContext';
@@ -148,6 +149,14 @@ function App() {
             element={
               <AdminProtectedRoute>
                 <AdminRobotsPage />
+              </AdminProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin/robots/ekle"
+            element={
+              <AdminProtectedRoute>
+                <AdminRobotAddPage />
               </AdminProtectedRoute>
             }
           />

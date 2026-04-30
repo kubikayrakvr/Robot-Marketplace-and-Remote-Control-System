@@ -88,23 +88,26 @@ function ShopPage() {
               </div>
             ) : (
               robots.map((robot) => (
-                <div key={robot.id} className="product-card">
+                <div key={robot.id} className={`product-card ${robot.stock_count === 0 ? 'out-of-stock' : ''}`}>
                   <div className="product-icon">🤖</div>
                   <h3 className="product-title">{robot.name}</h3>
                   <p className="product-desc">
                     {robot.model_type || 'Robot modeli'}
                   </p>
+                  <div className="product-stock" style={{ fontSize: '0.85rem', color: robot.stock_count > 0 ? '#10b981' : '#ef4444', marginBottom: '1rem' }}>
+                    {robot.stock_count > 0 ? `Stokta ${robot.stock_count} adet var` : 'Stokta yok'}
+                  </div>
                   <div className="product-footer">
                     <span className="product-price">
                       {robot.price.toLocaleString('tr-TR')} ₺
                     </span>
                     <button
                       type="button"
-                      className="primary-button add-button"
+                      className={`primary-button add-button ${robot.stock_count === 0 ? 'disabled' : ''}`}
                       onClick={() => handleAddToCart(robot)}
-                      disabled={addingId === robot.id}
+                      disabled={addingId === robot.id || robot.stock_count === 0}
                     >
-                      {addingId === robot.id ? 'Ekleniyor...' : 'Sepete Ekle'}
+                      {robot.stock_count === 0 ? 'Stokta Yok' : (addingId === robot.id ? 'Ekleniyor...' : 'Sepete Ekle')}
                     </button>
                   </div>
                 </div>
