@@ -42,10 +42,10 @@ def create_order(
             if Decimal(ci.unit_price) != Decimal(product.price):
                 raise HTTPException(status_code=400, detail=f"Fiyat değişti: {product.name}")
 
-            # Henüz satılmamış (is_activated=False) envanter ürünlerini al
-            inventory_items = db.query(RobotInventory).filter(
+            # Henüz satılmamış (UserRobot kaydı olmayan) envanter ürünlerini al
+            inventory_items = db.query(RobotInventory).outerjoin(UserRobot).filter(
                 RobotInventory.catalog_id == product.id,
-                RobotInventory.is_activated == False
+                UserRobot.id == None
             ).limit(ci.quantity).with_for_update().all()
 
             if len(inventory_items) < ci.quantity:
@@ -81,11 +81,8 @@ def create_order(
             item["product"].stock_count -= item["ci"].quantity
 
             # Her envanter ürünü için:
-            # - is_activated = True (satıldı, başkası alamaz)
-            # - UserRobot kaydı oluştur (kullanıcının envanterinde görünsün)
+            # - Sadece UserRobot kaydı oluştur (is_activated=False olarak kalır)
             for inv in item["inv"]:
-                inv.is_activated = True
-
                 user_robot = UserRobot(
                     user_id=current_user.id,
                     inventory_id=inv.id,

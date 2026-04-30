@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { activateRobotOnBackend } from '../api/userApi';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useRobots } from '../context/RobotContext';
 
 function ActivateRobotPage() {
   const navigate = useNavigate();
-  const [code, setCode] = useState('');
-  const [nickname, setNickname] = useState('');
+  const { id } = useParams(); // instanceId is not strictly needed for backend but good for reference
+  const { activateRobot } = useRobots();
+  const [serialNumber, setSerialNumber] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
@@ -16,16 +17,16 @@ function ActivateRobotPage() {
     setError('');
     setLoading(true);
 
-    try {
-      const result = await activateRobotOnBackend(code.trim(), nickname.trim());
-      setResultMsg(result.message || 'Robot basariyla aktiflesirildi!');
+    const result = await activateRobot(serialNumber.trim());
+    if (result.success) {
+      setResultMsg(result.message);
       setSuccess(true);
-    } catch (err) {
-      setError(err.message || 'Aktivasyon basarisiz');
-    } finally {
-      setLoading(false);
+    } else {
+      setError(result.message || 'Aktivasyon başarısız');
     }
+    setLoading(false);
   };
+
 
   if (success) {
     return (
@@ -37,9 +38,9 @@ function ActivateRobotPage() {
           <button
             type="button"
             className="primary-button"
-            onClick={() => navigate('/user')}
+            onClick={() => navigate('/user/robotlarim')}
           >
-            Panele Don
+            Robotlarıma Dön
           </button>
         </div>
       </div>
@@ -54,16 +55,16 @@ function ActivateRobotPage() {
             <p className="user-eyebrow">Aktivasyon</p>
             <h1>Robot Tanimlama</h1>
             <p className="user-subtitle">
-              Robotunuzu kullanmaya baslamak icin kutusundan cikan aktivasyon kodunu ve bir takma ad girin.
+              Robotunuzu aktifleştirmek için cihazın altındaki seri numarasını girin.
             </p>
           </div>
           <div className="user-meta">
             <button
               type="button"
               className="secondary-button"
-              onClick={() => navigate('/user')}
+              onClick={() => navigate('/user/robotlarim')}
             >
-              Iptal
+              İptal
             </button>
           </div>
         </header>
@@ -89,22 +90,12 @@ function ActivateRobotPage() {
 
             <form className="auth-form" onSubmit={handleActivate}>
               <label>
-                Aktivasyon Kodu
+                Seri Numarası
                 <input
                   type="text"
-                  placeholder="Kutudaki aktivasyon kodunu girin"
-                  value={code}
-                  onChange={(e) => setCode(e.target.value)}
-                  required
-                />
-              </label>
-              <label>
-                Robot Takma Adi
-                <input
-                  type="text"
-                  placeholder="Orn: Benim Robotum"
-                  value={nickname}
-                  onChange={(e) => setNickname(e.target.value)}
+                  placeholder="Örn: RBT-12345"
+                  value={serialNumber}
+                  onChange={(e) => setSerialNumber(e.target.value)}
                   required
                 />
               </label>
@@ -113,7 +104,7 @@ function ActivateRobotPage() {
                 className="primary-button full-width"
                 disabled={loading}
               >
-                {loading ? 'Aktiflestiriliyor...' : 'Aktiflestir'}
+                {loading ? 'Aktifleştiriliyor...' : 'Aktifleştir'}
               </button>
             </form>
           </div>

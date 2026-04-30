@@ -56,43 +56,45 @@ def get_my_robots(db: Session = Depends(get_db), user=Depends(get_current_user))
 
 @router.post("/tanimla")
 def activate_robot(
-    code: str,
-    nickname: str,
+    serial_number: str,
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    item = (
-        db.query(RobotInventory)
-        .filter(RobotInventory.activation_code == code)
+    # Kullanıcının sahip olduğu, eşleşen seri numarasına sahip envanteri bul
+    ownership = (
+        db.query(UserRobot)
+        .join(RobotInventory)
+        .filter(
+            UserRobot.user_id == user.id,
+            RobotInventory.serial_number == serial_number
+        )
         .with_for_update()
         .first()
     )
 
-    if not item:
-        raise HTTPException(status_code=404, detail="Geçersiz aktivasyon kodu!")
+    if not ownership:
+        raise HTTPException(status_code=404, detail="Size ait böyle bir seri numarasına sahip robot bulunamadı!")
+
+    item = db.query(RobotInventory).filter(RobotInventory.id == ownership.inventory_id).first()
 
     if item.is_activated:
         raise HTTPException(status_code=400, detail="Bu cihaz zaten aktive edilmiş!")
 
     try:
         item.is_activated = True
-
-        new_ownership = UserRobot(
-            user_id=user.id,
-            inventory_id=item.id,
-            nickname=nickname,
-        )
-        db.add(new_ownership)
+        
+        # Aktivasyon zamanını güncelle
+        ownership.activated_at = datetime.now(timezone.utc)
 
         log_entry = AuditLog(
             user_id=user.id,
             action="ROBOT_ACTIVATION_SUCCESS",
-            details={"serial": item.serial_number, "nickname": nickname},
+            details={"serial": item.serial_number, "nickname": ownership.nickname},
         )
         db.add(log_entry)
 
         db.commit()
-        db.refresh(new_ownership)
+        db.refresh(ownership)
 
         robot_model = db.query(RobotCatalog).filter(RobotCatalog.id == item.catalog_id).first()
 
@@ -103,16 +105,16 @@ def activate_robot(
 
         return {
             "status": "success",
-            "message": f"{nickname} artık senin kontrolünde!",
+            "message": f"{ownership.nickname} başarıyla aktive edildi ve artık kontrolünüzde!",
             "robot": {
-                "instanceId":   str(new_ownership.id),
+                "instanceId":   str(ownership.id),
                 "inventoryId":  str(item.id),
                 "modelId":      str(item.catalog_id),
                 "name":         robot_model.name if robot_model else "Bilinmeyen",
                 "icon":         getattr(robot_model, "icon", "🤖") if robot_model else "🤖",
                 "description":  getattr(robot_model, "description", "") if robot_model else "",
                 "serialNumber": item.serial_number,
-                "nickname":     nickname,
+                "nickname":     ownership.nickname,
                 "status":       "active",
                 "rosRobotId":   ros_robot_id,
             },

@@ -40,7 +40,13 @@ function MyRobotsPage() {
                 <div
                   key={robot.instanceId}
                   className={`inventory-card status-${robot.status}`}
-                  onClick={() => navigate(`/user/robotlarim/bilgi/${robot.instanceId}`)}
+                  onClick={() => {
+                    if (robot.status === 'inactive') {
+                      navigate(`/user/robotlarim/tanimla/${robot.instanceId}`);
+                    } else {
+                      navigate(`/user/robotlarim/bilgi/${robot.instanceId}`);
+                    }
+                  }}
                 >
                   <div className="inventory-icon">{robot.icon || '🤖'}</div>
                   <div className="inventory-details">
@@ -52,7 +58,9 @@ function MyRobotsPage() {
                       {robot.serialNumber}
                     </p>
                   </div>
-                  <div className="inventory-action">Görüntüle ➔</div>
+                  <div className="inventory-action">
+                    {robot.status === 'active' ? 'Görüntüle ➔' : 'Aktifleştir ➔'}
+                  </div>
                 </div>
               ))}
             </div>

@@ -123,8 +123,8 @@ export function fetchMyRobotsFromBackend() {
 }
 
 /** Aktivasyon kodu ile robotu kullanıcıya tanımlar */
-export function activateRobotOnBackend(code, nickname) {
-  return authFetch(`/api/user-robots/tanimla?code=${encodeURIComponent(code)}&nickname=${encodeURIComponent(nickname)}`, {
+export function activateRobotOnBackend(serial_number) {
+  return authFetch(`/api/user-robots/tanimla?serial_number=${encodeURIComponent(serial_number)}`, {
     method: 'POST',
   });
 }

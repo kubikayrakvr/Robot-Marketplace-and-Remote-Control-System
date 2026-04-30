@@ -40,9 +40,9 @@ export function RobotProvider({ children }) {
     await fetchMyRobots();
   }, [fetchMyRobots]);
 
-  const activateRobot = useCallback(async (instanceId, activationCode, nickname) => {
+  const activateRobot = useCallback(async (serialNumber) => {
     try {
-      const data = await activateRobotOnBackend(activationCode, nickname || activationCode);
+      const data = await activateRobotOnBackend(serialNumber);
       if (data && data.robot) {
         setOwnedRobots((prev) => {
           const exists = prev.find((r) => r.instanceId === data.robot.instanceId);
