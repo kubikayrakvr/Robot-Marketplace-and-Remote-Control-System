@@ -13,6 +13,7 @@ function UserPage() {
     { key: 'robots', title: 'Robotlarim', subtitle: 'Satin aldigin robotlari gor ve aktivasyon kodu ile etkinlestir.', icon: '🤖' },
     { key: 'control', title: 'Kontrol', subtitle: 'Gazebo sim ortamindaki robotuna baglanip uzaktan komut gonder.', icon: '🎮' },
     { key: 'activate', title: 'Robot Aktiflestir', subtitle: 'Kutusundan cikan aktivasyon kodu ile robotunu hesabina tanimla.', icon: '🔑' },
+    { key: 'orders', title: 'Siparişlerim', subtitle: 'Geçmiş siparişlerinizi ve faturalarınızı görüntüleyin.', icon: '📦' },
     { key: 'profile', title: 'Bilgilerim', subtitle: 'Profil ve hesap ayarlarini yonet.', icon: '👤' },
   ];
 
@@ -62,6 +63,8 @@ function UserPage() {
                   navigate('/user/kontrol');
                 } else if (item.key === 'activate') {
                   navigate('/user/robotlarim/tanimla/new');
+                } else if (item.key === 'orders') {
+                  navigate('/user/siparislerim');
                 } else if (item.key === 'profile') {
                   navigate('/user/profil');
                 }

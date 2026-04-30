@@ -1,34 +1,28 @@
 import { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { fetchMyRobotsFromBackend, activateRobotOnBackend } from '../api/userApi';
+import { getAccessToken } from '../auth/session';
 
 const RobotContext = createContext();
-const API = 'http://49.13.13.48:8000';
-
-function getAuthHeaders() {
-  const raw = localStorage.getItem('satproje.session');
-  const token = raw ? JSON.parse(raw)?.token : null;
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
-}
 
 export function RobotProvider({ children }) {
   const [ownedRobots, setOwnedRobots] = useState([]);
   const [loading, setLoading] = useState(false);
 
-const fetchMyRobots = useCallback(async (overrideToken = null) => {
+  const fetchMyRobots = useCallback(async () => {
     setLoading(true);
     try {
-      const raw = localStorage.getItem('satproje.session');
-      const token = overrideToken || (raw ? JSON.parse(raw)?.token : null);
+      const token = getAccessToken();
       if (!token) { setOwnedRobots([]); return; }
 
-      const res = await fetch(`${API}/api/user-robots/`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (res.status === 401 || res.status === 403) { setOwnedRobots([]); return; }
-      if (!res.ok) return;
-      const data = await res.json();
-      setOwnedRobots(data);
+      const data = await fetchMyRobotsFromBackend();
+      if (data) {
+        setOwnedRobots(data);
+      }
     } catch (e) {
       console.error('Robotlar yüklenemedi:', e);
+      if (e.message.includes('401') || e.message.includes('403')) {
+        setOwnedRobots([]);
+      }
     } finally {
       setLoading(false);
     }
@@ -36,12 +30,11 @@ const fetchMyRobots = useCallback(async (overrideToken = null) => {
 
   // f5 atınca robotlar gelsin diye
   useEffect(() => {
-    const raw = localStorage.getItem('satproje.session');
-    const token = raw ? JSON.parse(raw)?.token : null;
+    const token = getAccessToken();
     if (token) {
-      fetchMyRobots(token);
+      fetchMyRobots();
     }
-  }, []);
+  }, [fetchMyRobots]);
 
   const addPurchasedRobots = useCallback(async () => {
     await fetchMyRobots();
@@ -49,23 +42,15 @@ const fetchMyRobots = useCallback(async (overrideToken = null) => {
 
   const activateRobot = useCallback(async (instanceId, activationCode, nickname) => {
     try {
-      const res = await fetch(
-        `${API}/api/user-robots/tanimla?code=${encodeURIComponent(activationCode)}&nickname=${encodeURIComponent(nickname || activationCode)}`,
-        { method: 'POST', headers: getAuthHeaders() }
-      );
-      if (!res.ok) {
-        const err = await res.json();
-        throw new Error(err.detail || 'Aktivasyon başarısız');
-      }
-      const data = await res.json();
-      if (data.robot) {
+      const data = await activateRobotOnBackend(activationCode, nickname || activationCode);
+      if (data && data.robot) {
         setOwnedRobots((prev) => {
           const exists = prev.find((r) => r.instanceId === data.robot.instanceId);
           if (exists) return prev.map((r) => r.instanceId === data.robot.instanceId ? data.robot : r);
           return [...prev, data.robot];
         });
       }
-      return { success: true, message: data.message };
+      return { success: true, message: data?.message || 'Aktivasyon başarılı' };
     } catch (e) {
       return { success: false, message: e.message };
     }

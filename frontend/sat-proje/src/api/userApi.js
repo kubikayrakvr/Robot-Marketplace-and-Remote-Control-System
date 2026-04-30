@@ -117,9 +117,40 @@ export function fetchOrders() {
 
 // ─── ROBOT AKTİVASYON ────────────────────────────────────────
 
+/** Kullanıcının robotlarını getirir */
+export function fetchMyRobotsFromBackend() {
+  return authFetch('/api/user-robots/');
+}
+
 /** Aktivasyon kodu ile robotu kullanıcıya tanımlar */
 export function activateRobotOnBackend(code, nickname) {
   return authFetch(`/api/user-robots/tanimla?code=${encodeURIComponent(code)}&nickname=${encodeURIComponent(nickname)}`, {
     method: 'POST',
   });
+}
+
+// ─── AUTH (EKSTRA) ───────────────────────────────────────────
+
+export function refreshToken() {
+  return authFetch('/api/auth/refresh', { method: 'POST' });
+}
+
+export function forgotPassword(email) {
+  return publicFetch('/api/auth/forgot-password', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+  });
+}
+
+export function resetPassword(token, newPassword) {
+  return publicFetch('/api/auth/reset-password', {
+    method: 'POST',
+    body: JSON.stringify({ token, new_password: newPassword }),
+  });
+}
+
+// ─── SİPARİŞ DETAY ───────────────────────────────────────────
+
+export function fetchOrderById(orderId) {
+  return authFetch(`/api/orders/${orderId}`);
 }

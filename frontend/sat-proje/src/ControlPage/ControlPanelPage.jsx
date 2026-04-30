@@ -1,18 +1,123 @@
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useState, useRef } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { useRobots } from '../context/RobotContext';
+import { 
+  claimRosRobot, 
+  heartbeatRosRobot, 
+  releaseRosRobot, 
+  getRosWebSocketUrl, 
+  getRosStreamUrl 
+} from '../api/rosApi';
 
 function ControlPanelPage() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const { ownedRobots } = useRobots();
+  
+  const robot = ownedRobots.find((r) => r.instanceId === id);
+  const rosRobotId = robot?.rosRobotId;
+
+  const [sessionToken, setSessionToken] = useState(null);
+  const [status, setStatus] = useState('Bağlanıyor...');
+  const [telemetry, setTelemetry] = useState({ x: 0, y: 0, gz: 0 });
+  const [error, setError] = useState(null);
+  
+  const wsRef = useRef(null);
+  const heartbeatTimer = useRef(null);
+
+  useEffect(() => {
+    if (!rosRobotId) {
+      setError('Bu robot için tanımlı bir ROS ID bulunamadı.');
+      return;
+    }
+
+    let isMounted = true;
+    let currentToken = null;
+
+    async function connectToRobot() {
+      try {
+        const { token } = await claimRosRobot(rosRobotId);
+        if (!isMounted) {
+          releaseRosRobot(rosRobotId, token).catch(() => {});
+          return;
+        }
+        
+        currentToken = token;
+        setSessionToken(token);
+        setStatus('Bağlandı');
+
+        // Start heartbeat
+        heartbeatTimer.current = setInterval(() => {
+          heartbeatRosRobot(rosRobotId, token).catch(err => {
+            console.error('Heartbeat error', err);
+          });
+        }, 10000);
+
+        // Connect WebSocket
+        const wsUrl = getRosWebSocketUrl(rosRobotId, token);
+        wsRef.current = new WebSocket(wsUrl);
+
+        wsRef.current.onmessage = (event) => {
+          try {
+            const data = JSON.parse(event.data);
+            if (data.type === 'odom') {
+              setTelemetry(prev => ({ ...prev, x: data.x, y: data.y }));
+            } else if (data.type === 'imu') {
+              setTelemetry(prev => ({ ...prev, gz: data.gz }));
+            }
+          } catch (e) {
+            console.error("WS error", e);
+          }
+        };
+
+        wsRef.current.onclose = () => {
+          if (isMounted) {
+            setStatus('Bağlantı kesildi');
+          }
+        };
+
+      } catch (err) {
+        if (isMounted) {
+          setError(err.message || 'Robota bağlanılamadı. Robot kullanımda olabilir.');
+          setStatus('Hata');
+        }
+      }
+    }
+
+    connectToRobot();
+
+    return () => {
+      isMounted = false;
+      if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
+      if (wsRef.current) wsRef.current.close();
+      if (currentToken) {
+        releaseRosRobot(rosRobotId, currentToken).catch(() => {});
+      }
+    };
+  }, [rosRobotId]);
+
+  if (error) {
+    return (
+      <div className="control-station" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+        <div style={{ background: '#2a2a2a', padding: '2rem', borderRadius: '12px', textAlign: 'center' }}>
+          <h2>Bağlantı Hatası</h2>
+          <p>{error}</p>
+          <button className="secondary-button" style={{ marginTop: '1rem' }} onClick={() => navigate('/user/kontrol')}>Geri Dön</button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="control-station">
       <header className="control-header">
         <div className="control-title">
           <button className="back-btn" onClick={() => navigate('/user/kontrol')}>← Ayril</button>
-          <h2>Robot Kontrol Paneli</h2>
+          <h2>{robot?.nickname || robot?.name || 'Robot'} Kontrol Paneli</h2>
         </div>
-        <div className="connection-status connecting">
-          <div className="status-dot"></div>
-          ROS/Gazebo Entegrasyonu Bekleniyor
+        <div className={`connection-status ${status === 'Bağlandı' ? 'connected' : 'connecting'}`}>
+          <div className="status-dot" style={{ backgroundColor: status === 'Bağlandı' ? '#4ade80' : '#f59e0b' }}></div>
+          {status}
         </div>
       </header>
 
@@ -20,11 +125,21 @@ function ControlPanelPage() {
         {/* Sol Panel: Kamera Akisi */}
         <div className="panel camera-panel">
           <div className="panel-header">Ana Kamera (Gazebo)</div>
-          <div className="camera-feed">
-            <div className="camera-loading">
-              Gazebo simulasyon sunucusu baglantisi henuz aktif degil. 
-              ROS 2 entegrasyonu tamamlandiginda canli goruntu burada goruntulenecektir.
-            </div>
+          <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+            {sessionToken ? (
+              <img 
+                src={getRosStreamUrl(rosRobotId, sessionToken)} 
+                alt="Robot Kamera Akışı" 
+                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                  e.target.nextSibling.style.display = 'block';
+                }}
+              />
+            ) : (
+              <div className="camera-loading">Video akışı bekleniyor...</div>
+            )}
+            <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
           </div>
         </div>
 
@@ -34,16 +149,16 @@ function ControlPanelPage() {
             <div className="panel-header">Telemetri Verileri</div>
             <div className="telemetry-grid">
               <div className="telemetry-box">
-                <span className="t-label">HIZ (m/s)</span>
-                <span className="t-value">—</span>
+                <span className="t-label">X (m)</span>
+                <span className="t-value">{telemetry.x.toFixed(3)}</span>
               </div>
               <div className="telemetry-box">
-                <span className="t-label">YON (°)</span>
-                <span className="t-value">—</span>
+                <span className="t-label">Y (m)</span>
+                <span className="t-value">{telemetry.y.toFixed(3)}</span>
               </div>
               <div className="telemetry-box">
-                <span className="t-label">YUKSEKLIK (m)</span>
-                <span className="t-value">—</span>
+                <span className="t-label">Z (rad/s)</span>
+                <span className="t-value">{telemetry.gz.toFixed(3)}</span>
               </div>
             </div>
           </div>
@@ -51,16 +166,16 @@ function ControlPanelPage() {
           <div className="panel-section control-section">
             <div className="panel-header">Manuel Surus (Joystick)</div>
             <div className="joystick-container">
-              <button className="joy-btn joy-up" disabled>▲</button>
-              <button className="joy-btn joy-left" disabled>◀</button>
+              <button className="joy-btn joy-up" disabled={status !== 'Bağlandı'}>▲</button>
+              <button className="joy-btn joy-left" disabled={status !== 'Bağlandı'}>◀</button>
               <div className="joy-center"></div>
-              <button className="joy-btn joy-right" disabled>▶</button>
-              <button className="joy-btn joy-down" disabled>▼</button>
+              <button className="joy-btn joy-right" disabled={status !== 'Bağlandı'}>▶</button>
+              <button className="joy-btn joy-down" disabled={status !== 'Bağlandı'}>▼</button>
             </div>
           </div>
 
           <div className="panel-section action-section">
-            <button className="danger-button full-width" disabled>ACIL DURDURMA (E-STOP)</button>
+            <button className="danger-button full-width" disabled={status !== 'Bağlandı'}>ACIL DURDURMA (E-STOP)</button>
           </div>
         </div>
       </div>

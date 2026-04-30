@@ -12,6 +12,8 @@ import ActivateRobotPage from './MyRobotsPage/ActivateRobotPage';
 import RobotInfoPage from './MyRobotsPage/RobotInfoPage';
 import ControlSelectionPage from './ControlPage/ControlSelectionPage';
 import ControlPanelPage from './ControlPage/ControlPanelPage';
+import OrdersPage from './UserPage/OrdersPage';
+import OrderDetailsPage from './UserPage/OrderDetailsPage';
 import AdminLoginPage from './AdminPage/AdminLoginPage';
 import AdminProtectedRoute from './AdminPage/AdminProtectedRoute';
 import AdminRobotsPage from './AdminPage/AdminRobotsPage';
@@ -119,6 +121,22 @@ function App() {
             element={
               <ProtectedRoute>
                 <ControlPanelPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user/siparislerim"
+            element={
+              <ProtectedRoute>
+                <OrdersPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user/siparislerim/:id"
+            element={
+              <ProtectedRoute>
+                <OrderDetailsPage />
               </ProtectedRoute>
             }
           />
