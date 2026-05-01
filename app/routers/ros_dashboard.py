@@ -1,9 +1,9 @@
-# app/routers/ros_dashboard.py
 import asyncio
 import json
 import time
 import uuid
 import threading
+import websockets
 from typing import Optional
 
 from fastapi import APIRouter, Header, HTTPException, WebSocket, WebSocketDisconnect
@@ -13,17 +13,6 @@ import httpx
 from app.database import SessionLocal
 from app.models.audit import AuditLog
 from app.models.robot import RobotCatalog
-# ── ROS (opsiyonel) ────────────────────────────────────────────────────────────
-try:
-    import rclpy
-    from rclpy.node import Node
-    from nav_msgs.msg import Odometry
-    from sensor_msgs.msg import Imu, LaserScan
-    from std_msgs.msg import String
-    ROS_AVAILABLE = True
-except ImportError:
-    ROS_AVAILABLE = False
-    print("[ros_dashboard] ROS 2 bulunamadı — web-only modda çalışıyor")
 
 router = APIRouter(prefix="/ros", tags=["ROS Dashboard"])
 
@@ -31,17 +20,13 @@ router = APIRouter(prefix="/ros", tags=["ROS Dashboard"])
 _sessions: dict[str, dict] = {}
 _active_ws: dict[str, WebSocket] = {}
 _claim_lock = asyncio.Lock()
-_ros_node = None
 _loop = None
 
 SESSION_TIMEOUT_S = 15.0
+ROSBRIDGE_URL = "ws://host.docker.internal:9090"
 
 
 def _load_robot_database() -> dict:
-    """
-    DB'den ros_namespace tanımlı robotları yükler.
-    rob100 → ROB-100, rob200 → ROB-200
-    """
     db = SessionLocal()
     try:
         robots = db.query(RobotCatalog).filter(
@@ -49,10 +34,9 @@ def _load_robot_database() -> dict:
         ).all()
         result = {}
         for r in robots:
-            # rob100 → ROB-100
-            ns = r.ros_namespace  # "rob100"
-            num = ns.replace("rob", "")  # "100"
-            key = f"ROB-{num}"  # "ROB-100"
+            ns = r.ros_namespace
+            num = ns.replace("rob", "")
+            key = f"ROB-{num}"
             result[key] = {
                 "namespace": ns,
                 "name": r.name,
@@ -81,6 +65,64 @@ async def _reap_sessions():
         for rid in stale:
             del _sessions[rid]
             print(f"[session reaper] {rid!r} süresi doldu, silindi.")
+
+
+# ── Rosbridge client ───────────────────────────────────────────────────────────
+
+async def _rosbridge_subscribe(robot_id: str, namespace: str):
+    """Rosbridge'e bağlanır, odom/imu topic'lerine subscribe olur, FastAPI WS'e yayar."""
+    topics = [
+        {"topic": f"/{namespace}/odom", "type": "nav_msgs/Odometry", "msg_type": "odom"},
+        {"topic": f"/{namespace}/imu",  "type": "sensor_msgs/Imu",   "msg_type": "imu"},
+    ]
+    while True:
+        try:
+            async with websockets.connect(ROSBRIDGE_URL) as ws:
+                print(f"[rosbridge] {robot_id} bağlandı")
+
+                for t in topics:
+                    sub_msg = json.dumps({
+                        "op": "subscribe",
+                        "topic": t["topic"],
+                        "type": t["type"],
+                        "throttle_rate": 200,  # ms
+                    })
+                    await ws.send(sub_msg)
+
+                async for raw in ws:
+                    msg = json.loads(raw)
+                    if msg.get("op") != "publish":
+                        continue
+
+                    topic = msg.get("topic", "")
+                    data_msg = msg.get("msg", {})
+                    payload = {"robot_id": robot_id}
+
+                    if f"/{namespace}/odom" in topic:
+                        pos = data_msg.get("pose", {}).get("pose", {}).get("position", {})
+                        payload["type"] = "odom"
+                        payload["x"] = round(pos.get("x", 0), 3)
+                        payload["y"] = round(pos.get("y", 0), 3)
+
+                    elif f"/{namespace}/imu" in topic:
+                        av = data_msg.get("angular_velocity", {})
+                        payload["type"] = "imu"
+                        payload["gz"] = round(av.get("z", 0), 3)
+
+                    else:
+                        continue
+
+                    # FastAPI WS'e yayar
+                    client_ws = _active_ws.get(robot_id)
+                    if client_ws:
+                        try:
+                            await client_ws.send_json(payload)
+                        except Exception:
+                            _active_ws.pop(robot_id, None)
+
+        except Exception as e:
+            print(f"[rosbridge] {robot_id} bağlantı hatası: {e} — 3s sonra tekrar denenecek")
+            await asyncio.sleep(3)
 
 
 # ── REST Endpointleri ──────────────────────────────────────────────────────────
@@ -180,7 +222,6 @@ async def telemetry_ws(websocket: WebSocket, robot_id: str, token: str):
     try:
         while True:
             data = await websocket.receive_text()
-            # Komut loglama
             try:
                 msg = json.loads(data)
                 if msg.get("command"):
@@ -203,6 +244,7 @@ async def telemetry_ws(websocket: WebSocket, robot_id: str, token: str):
             _active_ws.pop(clean_id, None)
         print(f"[ws] {clean_id!r} bağlantısı kesildi.")
 
+
 # ── Video Stream ───────────────────────────────────────────────────────────────
 
 @router.get("/robot/{robot_id}/stream")
@@ -213,7 +255,7 @@ async def video_stream(robot_id: str, token: str):
         raise HTTPException(status_code=403, detail="Yetkisiz video erişimi")
 
     namespace = ROBOT_DATABASE[clean_id]["namespace"]
-    target_url = f"http://localhost:8090/stream?topic=/{namespace}/camera/image_raw"
+    target_url = f"http://host.docker.internal:8090/stream?topic=/{namespace}/camera/image_raw"
 
     async def stream_generator():
         async with httpx.AsyncClient() as client:
@@ -229,63 +271,6 @@ async def video_stream(robot_id: str, token: str):
     )
 
 
-# ── ROS Broadcast ──────────────────────────────────────────────────────────────
-
-async def _broadcast(robot_id: str, data: dict):
-    ws = _active_ws.get(robot_id.upper())
-    if ws:
-        try:
-            await ws.send_json(data)
-        except Exception:
-            _active_ws.pop(robot_id.upper(), None)
-
-
-def _telemetry_callback(msg, robot_id: str, msg_type: str):
-    if not _loop:
-        return
-    data = {"type": msg_type, "robot_id": robot_id}
-
-    if msg_type == "odom":
-        data.update({
-            "x": round(msg.pose.pose.position.x, 3),
-            "y": round(msg.pose.pose.position.y, 3),
-        })
-    elif msg_type == "imu":
-        data.update({"gz": round(msg.angular_velocity.z, 3)})
-    elif msg_type == "scan":
-        cleaned = [
-            float(r) if (msg.range_min < r < msg.range_max and r != float('inf')) else 0.0
-            for r in msg.ranges
-        ]
-        data.update({
-            "ranges": cleaned,
-            "angle_min": msg.angle_min,
-            "angle_max": msg.angle_max,
-            "angle_increment": msg.angle_increment,
-        })
-
-    asyncio.run_coroutine_threadsafe(_broadcast(robot_id, data), _loop)
-
-
-def _run_ros():
-    global _ros_node
-    rclpy.init()
-    _ros_node = Node('fleet_dashboard_relay')
-    for rid, info in ROBOT_DATABASE.items():
-        ns = info['namespace']
-        _ros_node.create_subscription(
-            Odometry, f"/{ns}/odom",
-            lambda m, r=rid: _telemetry_callback(m, r, "odom"), 10)
-        _ros_node.create_subscription(
-            Imu, f"/{ns}/imu",
-            lambda m, r=rid: _telemetry_callback(m, r, "imu"), 10)
-        _ros_node.create_subscription(
-            LaserScan, f"/{ns}/scan",
-            lambda m, r=rid: _telemetry_callback(m, r, "scan"), 10)
-    print("[ROS] Fleet Dashboard Relay başlatıldı.")
-    rclpy.spin(_ros_node)
-
-
 # ── Startup ────────────────────────────────────────────────────────────────────
 
 async def ros_startup(loop: asyncio.AbstractEventLoop):
@@ -293,8 +278,8 @@ async def ros_startup(loop: asyncio.AbstractEventLoop):
     _loop = loop
     ROBOT_DATABASE = _load_robot_database()
     asyncio.create_task(_reap_sessions())
-    if ROS_AVAILABLE:
-        threading.Thread(target=_run_ros, daemon=True).start()
-        print("[ROS] ROS 2 node başlatıldı.")
-    else:
-        print("[ROS] ROS 2 yok — web-only modda çalışıyor.")
+
+    # Her robot için rosbridge subscriber başlat
+    for rid, info in ROBOT_DATABASE.items():
+        asyncio.create_task(_rosbridge_subscribe(rid, info["namespace"]))
+        print(f"[rosbridge] {rid} için subscriber başlatıldı")
