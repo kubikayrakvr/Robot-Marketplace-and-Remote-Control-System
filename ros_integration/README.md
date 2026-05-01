@@ -10,7 +10,7 @@ A full-stack system developed with ROS Jazzy for controlling and monitoring a fl
 Browser (roslibjs + Dashboard UI)
         │  WebSocket (rosbridge :9090)   ← cmd_vel_web, session/heartbeat
         │  REST / WebSocket (:8000)      ← claim, heartbeat, telemetry WS
-        │  MJPEG stream (:8090)          ← gated camera proxy
+        │  MJPEG stream (:8080)          ← gated camera proxy
         ▼
   FastAPI Server  ←──── ros_web_integration_prototype.py
         │  ROS 2 subscriptions (Odom, IMU, LaserScan, Pose, Status)
@@ -77,13 +77,13 @@ Default ports:
 | Service | Port |
 |---|---|
 | ROSBridge WebSocket | 9090 |
-| Web Video Server (MJPEG) | 8090 |
+| Web Video Server (MJPEG) | 8080 |
 
 You can override either at launch time:
 
 ```bash
 ros2 launch rosbridge_server rosbridge_endpoints_launch.xml \
-    rosbridge_port:=9090 video_port:=8090
+    rosbridge_port:=9090 video_port:=8080
 ```
 
 ---
@@ -224,7 +224,7 @@ Forward all three service ports from your local machine to your cloud server ove
 
 ```bash
 ssh -R 9090:localhost:9090 \
-    -R 8090:localhost:8090 \
+    -R 8080:localhost:8080 \
     -R 8000:localhost:8000 \
     root@YOUR_CLOUD_IP
 ```
@@ -234,7 +234,7 @@ Port summary:
 | Port | Service |
 |---|---|
 | 9090 | ROSBridge WebSocket |
-| 8090 | Web Video Server (MJPEG) |
+| 8080 | Web Video Server (MJPEG) |
 | 8000 | FastAPI Dashboard |
 
 ---
