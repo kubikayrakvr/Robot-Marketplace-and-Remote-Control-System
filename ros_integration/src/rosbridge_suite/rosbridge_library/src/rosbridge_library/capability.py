@@ -34,7 +34,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.exceptions import (
+from rosbridge_library.internal.exceptions import (
     InvalidArgumentException,
     MissingArgumentException,
 )
@@ -42,7 +42,7 @@ from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class Capability:

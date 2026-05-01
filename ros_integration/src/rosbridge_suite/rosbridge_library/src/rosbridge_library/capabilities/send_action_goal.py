@@ -39,13 +39,13 @@ from typing import TYPE_CHECKING, Any
 
 from action_msgs.msg import GoalStatus
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.actions import ActionClientHandler
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import extract_values
+from rosbridge_library.capability import Capability
+from rosbridge_library.internal.actions import ActionClientHandler
+from rosbridge_library.internal.message_conversion import extract_values
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import FeedbackMessage, ROSMessage
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.internal.type_support import FeedbackMessage, ROSMessage
+    from rosbridge_library.protocol import Protocol
 
 
 class SendActionGoal(Capability):

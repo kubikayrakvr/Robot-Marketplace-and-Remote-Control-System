@@ -37,7 +37,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import (
+    from rosbridge_library.internal.type_support import (
         ROSAction,
         ROSMessage,
         ROSService,

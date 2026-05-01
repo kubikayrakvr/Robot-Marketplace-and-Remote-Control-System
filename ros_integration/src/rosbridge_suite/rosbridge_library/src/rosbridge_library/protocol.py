@@ -35,19 +35,18 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capabilities.fragmentation import Fragmentation
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import message_conversion
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import publishers
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.util import bson, json
+from rosbridge_library.capabilities.fragmentation import Fragmentation
+from rosbridge_library.internal import message_conversion, publishers
+from rosbridge_library.util import bson, json
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rclpy.node import Node
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capabilities.advertise_action import AdvertisedActionHandler
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capabilities.advertise_service import AdvertisedServiceHandler
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
+    from rosbridge_library.capabilities.advertise_action import AdvertisedActionHandler
+    from rosbridge_library.capabilities.advertise_service import AdvertisedServiceHandler
+    from rosbridge_library.capability import Capability
 
 
 def is_number(s: object) -> bool | None:

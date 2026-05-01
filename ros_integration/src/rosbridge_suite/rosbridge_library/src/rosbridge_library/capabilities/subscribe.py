@@ -37,19 +37,19 @@ from functools import partial
 from threading import Lock
 from typing import TYPE_CHECKING, Any, Generic
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.pngcompression import encode as encode_png
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.subscribers import manager
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.subscription_modifiers import MessageHandler
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessageT
+from rosbridge_library.capability import Capability
+from rosbridge_library.internal.pngcompression import encode as encode_png
+from rosbridge_library.internal.subscribers import manager
+from rosbridge_library.internal.subscription_modifiers import MessageHandler
+from rosbridge_library.internal.type_support import ROSMessageT
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
     from rclpy.node import Node
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.outgoing_message import OutgoingMessage
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.internal.outgoing_message import OutgoingMessage
+    from rosbridge_library.protocol import Protocol
 
 
 try:

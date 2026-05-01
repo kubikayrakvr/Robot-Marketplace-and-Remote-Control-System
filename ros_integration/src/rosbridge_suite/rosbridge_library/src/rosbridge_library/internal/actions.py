@@ -38,15 +38,15 @@ from typing import TYPE_CHECKING, Any, Generic, cast
 from rclpy.action import ActionClient
 from rclpy.expand_topic_name import expand_topic_name
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import (
+from rosbridge_library.internal.message_conversion import (
     extract_values,
     populate_instance,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.ros_loader import (
+from rosbridge_library.internal.ros_loader import (
     get_action_class,
     get_action_goal_instance,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import (
+from rosbridge_library.internal.type_support import (
     ROSActionFeedbackT,
     ROSActionGoalT,
     ROSActionResultT,
@@ -59,7 +59,7 @@ if TYPE_CHECKING:
     from rclpy.node import Node
     from rclpy.task import Future
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import (
+    from rosbridge_library.internal.type_support import (
         FeedbackMessage,
         GetResultServiceResponse,
         ROSMessage,

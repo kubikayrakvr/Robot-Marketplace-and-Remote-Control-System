@@ -36,11 +36,11 @@ from __future__ import annotations
 import fnmatch
 from typing import TYPE_CHECKING, Any
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.publishers import manager
+from rosbridge_library.capability import Capability
+from rosbridge_library.internal.publishers import manager
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class Publish(Capability):

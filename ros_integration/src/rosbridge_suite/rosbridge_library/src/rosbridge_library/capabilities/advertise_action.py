@@ -41,10 +41,10 @@ from rclpy.action.server import CancelResponse, ServerGoalHandle
 from rclpy.callback_groups import ReentrantCallbackGroup
 from rclpy.task import Future
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import message_conversion
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.ros_loader import get_action_class
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import (
+from rosbridge_library.capability import Capability
+from rosbridge_library.internal import message_conversion
+from rosbridge_library.internal.ros_loader import get_action_class
+from rosbridge_library.internal.type_support import (
     ROSActionFeedbackT,
     ROSActionGoalT,
     ROSActionResultT,
@@ -52,7 +52,7 @@ from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library
 )
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class AdvertisedActionHandler(Generic[ROSActionGoalT, ROSActionResultT, ROSActionFeedbackT]):

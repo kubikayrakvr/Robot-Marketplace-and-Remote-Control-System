@@ -40,7 +40,7 @@ from typing import Any, TypeVar
 from rosbridge_library.internal import ros_loader
 from rosbridge_library.internal.type_support import ROSMessage
 
-from ros_integration.src.rosbridge_suite.rosapi.src.rosapi.stringify_field_types import stringify_field_types
+from rosapi.stringify_field_types import stringify_field_types
 
 logger = logging.getLogger(__name__)
 

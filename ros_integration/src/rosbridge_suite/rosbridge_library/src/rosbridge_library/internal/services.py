@@ -36,11 +36,11 @@ from typing import TYPE_CHECKING, Any
 
 from rclpy.callback_groups import ReentrantCallbackGroup
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import (
+from rosbridge_library.internal.message_conversion import (
     extract_values,
     populate_instance,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.ros_loader import (
+from rosbridge_library.internal.ros_loader import (
     get_service_class,
     get_service_request_instance,
 )
@@ -51,7 +51,7 @@ if TYPE_CHECKING:
     from rclpy.client import Client
     from rclpy.node import Node
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessage
+    from rosbridge_library.internal.type_support import ROSMessage
 
 
 class InvalidServiceException(Exception):

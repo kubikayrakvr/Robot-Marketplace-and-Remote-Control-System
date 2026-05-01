@@ -42,8 +42,8 @@ from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.parameter import get_parameter_value
 from ros2node.api import get_absolute_node_name
 
-from ros_integration.src.rosbridge_suite.rosapi.src.rosapi.async_helper import futures_wait_for
-from ros_integration.src.rosbridge_suite.rosapi.src.rosapi.proxy import get_nodes
+from rosapi.async_helper import futures_wait_for
+from rosapi.proxy import get_nodes
 
 if TYPE_CHECKING:
     from rclpy.node import Node

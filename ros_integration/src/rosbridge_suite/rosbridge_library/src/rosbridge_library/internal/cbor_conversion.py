@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 from cbor2 import CBORTag
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessage
+    from rosbridge_library.internal.type_support import ROSMessage
 
 LIST_TYPES = [list, tuple]
 INT_TYPES = [

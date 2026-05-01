@@ -37,11 +37,11 @@ from functools import partial
 from threading import Thread
 from typing import TYPE_CHECKING, Any
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.services import ServiceCaller
+from rosbridge_library.capability import Capability
+from rosbridge_library.internal.services import ServiceCaller
 
 if TYPE_CHECKING:
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class CallService(Capability):

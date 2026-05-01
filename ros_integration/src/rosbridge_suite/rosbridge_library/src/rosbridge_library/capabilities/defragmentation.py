@@ -3,12 +3,12 @@ from __future__ import annotations
 import time
 from typing import TYPE_CHECKING, Any, ClassVar
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
+from rosbridge_library.capability import Capability
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class Defragment(Capability):

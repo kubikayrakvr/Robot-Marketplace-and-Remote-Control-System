@@ -35,12 +35,12 @@ from __future__ import annotations
 import math
 from typing import TYPE_CHECKING, Any
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.capability import Capability
+from rosbridge_library.capability import Capability
 
 if TYPE_CHECKING:
     from collections.abc import Generator, Iterable, Sequence
 
-    from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.protocol import Protocol
+    from rosbridge_library.protocol import Protocol
 
 
 class Fragmentation(Capability):

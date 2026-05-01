@@ -14,13 +14,13 @@ from twisted.python import log
 
 sys.path.append(str(Path(__file__).parent))  # enable importing from common.py in this directory
 
-import ros_integration.src.rosbridge_suite.rosbridge_server.test.websocket.common as common
-from ros_integration.src.rosbridge_suite.rosbridge_server.test.websocket.common import expect_messages, websocket_test
+import common
+from common import expect_messages, websocket_test
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from ros_integration.src.rosbridge_suite.rosbridge_server.test.websocket.common import TestClientProtocol
+    from common import TestClientProtocol
     from example_interfaces.action._fibonacci import Fibonacci_Result
     from rclpy.action.server import ServerGoalHandle
     from rclpy.node import Node

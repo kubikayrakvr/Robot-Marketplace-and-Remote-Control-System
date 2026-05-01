@@ -4,11 +4,11 @@ from typing import Any, Generic
 
 from cbor2 import dumps as encode_cbor
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.cbor_conversion import extract_cbor_values
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import (
+from rosbridge_library.internal.cbor_conversion import extract_cbor_values
+from rosbridge_library.internal.message_conversion import (
     extract_values as extract_json_values,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessageT
+from rosbridge_library.internal.type_support import ROSMessageT
 
 
 class OutgoingMessage(Generic[ROSMessageT]):

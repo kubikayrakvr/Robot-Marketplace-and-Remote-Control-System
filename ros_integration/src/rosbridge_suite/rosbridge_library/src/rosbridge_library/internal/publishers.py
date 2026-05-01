@@ -39,14 +39,13 @@ from typing import TYPE_CHECKING, Any, Generic, cast
 from rclpy.duration import Duration
 from rclpy.qos import DurabilityPolicy, QoSProfile
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import message_conversion
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import ros_loader
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import msg_class_type_repr
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.topics import (
+from rosbridge_library.internal import message_conversion, ros_loader
+from rosbridge_library.internal.message_conversion import msg_class_type_repr
+from rosbridge_library.internal.topics import (
     TopicNotEstablishedException,
     TypeConflictException,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessage, ROSMessageT
+from rosbridge_library.internal.type_support import ROSMessage, ROSMessageT
 
 if TYPE_CHECKING:
     from rclpy.node import Node

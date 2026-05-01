@@ -40,14 +40,14 @@ from typing import TYPE_CHECKING, Generic, cast
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup
 from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import ros_loader
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.message_conversion import msg_class_type_repr
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.outgoing_message import OutgoingMessage
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.topics import (
+from rosbridge_library.internal import ros_loader
+from rosbridge_library.internal.message_conversion import msg_class_type_repr
+from rosbridge_library.internal.outgoing_message import OutgoingMessage
+from rosbridge_library.internal.topics import (
     TopicNotEstablishedException,
     TypeConflictException,
 )
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessageT
+from rosbridge_library.internal.type_support import ROSMessageT
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterable

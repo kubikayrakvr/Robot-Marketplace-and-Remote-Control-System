@@ -45,9 +45,9 @@ from builtin_interfaces.msg import Time as TimeMsg
 from rclpy.clock import ROSClock
 from std_msgs.msg import Header as HeaderMsg
 
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal import ros_loader
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.internal.type_support import ROSMessage
-from ros_integration.src.rosbridge_suite.rosbridge_library.src.rosbridge_library.util import bson
+from rosbridge_library.internal import ros_loader
+from rosbridge_library.internal.type_support import ROSMessage
+from rosbridge_library.util import bson
 
 if TYPE_CHECKING:
     from collections.abc import Callable
