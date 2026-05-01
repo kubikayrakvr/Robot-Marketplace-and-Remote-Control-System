@@ -17,6 +17,8 @@ services:
     volumes:
       - .:/app
     restart: always
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   # FRONTEND: Vite & User Interface
   frontend:
