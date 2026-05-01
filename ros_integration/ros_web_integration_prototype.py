@@ -1396,7 +1396,7 @@ async def gated_video_stream(robot_id: str, token: str):
         raise HTTPException(status_code=404, detail="This robot is not equipped with a camera.")
 
     namespace = ROBOT_DATABASE[clean_id]["namespace"]
-    target_url = f"http://localhost:8080/stream?topic=/{namespace}/camera/image_raw"
+    target_url = f"http://localhost:8090/stream?topic=/{namespace}/camera/image_raw"
     
     async def stream_generator():
         async with httpx.AsyncClient() as client:
@@ -1467,4 +1467,4 @@ async def universal_release(robot_id: str, token: Optional[str] = None, x_sessio
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=000)
+    uvicorn.run(app, host="0.0.0.0", port=9000)
