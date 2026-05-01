@@ -1370,7 +1370,7 @@ def run_ros():
         ns = info['namespace']
         # Secure relay subscriptions
         ros_node.create_subscription(Odometry, f"/{ns}/odom", lambda m, r=rid: telemetry_callback(m, r, "odom"), 10)
-        ros_node.create_subscription(Pose, f"/model/{ns}/pose", lambda m, r=rid: telemetry_callback(m, r, "pose"), 10)
+        ros_node.create_subscription(Pose, f"/{ns}/pose", lambda m, r=rid: telemetry_callback(m, r, "pose"), 10)
         ros_node.create_subscription(Imu, f"/{ns}/imu", lambda m, r=rid: telemetry_callback(m, r, "imu"), 10)
         ros_node.create_subscription(LaserScan, f"/{ns}/scan", lambda m, r=rid: telemetry_callback(m, r, "scan"), 10)
         ros_node.create_subscription(String, f"/{ns}/collision_status", lambda m, r=rid: telemetry_callback(m, r, "collision"), 10)
