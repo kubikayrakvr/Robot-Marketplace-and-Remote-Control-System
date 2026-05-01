@@ -213,7 +213,7 @@ async def video_stream(robot_id: str, token: str):
         raise HTTPException(status_code=403, detail="Yetkisiz video erişimi")
 
     namespace = ROBOT_DATABASE[clean_id]["namespace"]
-    target_url = f"http://localhost:8080/stream?topic=/{namespace}/camera/image_raw"
+    target_url = f"http://localhost:8090/stream?topic=/{namespace}/camera/image_raw"
 
     async def stream_generator():
         async with httpx.AsyncClient() as client:

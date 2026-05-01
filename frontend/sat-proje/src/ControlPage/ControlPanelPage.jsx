@@ -1,13 +1,15 @@
+import '../roslib.min.js';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRobots } from '../context/RobotContext';
 import { 
   claimRosRobot, 
   heartbeatRosRobot, 
-  releaseRosRobot, 
-  getRosWebSocketUrl, 
+  releaseRosRobot,
   getRosStreamUrl 
 } from '../api/rosApi';
+
+const ROSBRIDGE_URL = 'ws://49.13.13.48:9090';
 
 function ControlPanelPage() {
   const navigate = useNavigate();
@@ -22,12 +24,26 @@ function ControlPanelPage() {
   const [telemetry, setTelemetry] = useState({ x: 0, y: 0, gz: 0 });
   const [error, setError] = useState(null);
   
-  const wsRef = useRef(null);
   const heartbeatTimer = useRef(null);
+  const rosRef = useRef(null);
+  const cmdVelRef = useRef(null);
+  const hbRosRef = useRef(null);
+  const hbRosTimer = useRef(null);
+  const tokenRef = useRef(null);
 
   const sendCommand = (command) => {
-    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ command }));
+    const vel = { linear: { x: 0, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } };
+
+    if (command === 'FORWARD')  vel.linear.x  =  0.3;
+    if (command === 'BACKWARD') vel.linear.x  = -0.3;
+    if (command === 'LEFT')     vel.angular.z =  0.5;
+    if (command === 'RIGHT')    vel.angular.z = -0.5;
+
+    if (cmdVelRef.current && tokenRef.current) {
+      cmdVelRef.current.publish(new window.ROSLIB.Message({
+        token: tokenRef.current,
+        command: vel,
+      }));
     }
   };
 
@@ -39,6 +55,7 @@ function ControlPanelPage() {
 
     let isMounted = true;
     let currentToken = null;
+    const ns = rosRobotId.toLowerCase().replace('rob-', 'rob');
 
     async function connectToRobot() {
       try {
@@ -49,36 +66,78 @@ function ControlPanelPage() {
         }
         
         currentToken = token;
+        tokenRef.current = token;
         setSessionToken(token);
-        setStatus('Bağlandı');
 
+        // FastAPI heartbeat
         heartbeatTimer.current = setInterval(() => {
           heartbeatRosRobot(rosRobotId, token).catch(err => {
-            console.error('Heartbeat error', err);
+            console.error('FastAPI heartbeat error', err);
           });
         }, 10000);
 
-        const wsUrl = getRosWebSocketUrl(rosRobotId, token);
-        wsRef.current = new WebSocket(wsUrl);
+        // roslibjs rosbridge bağlantısı
+        const ros = new window.ROSLIB.Ros({ url: ROSBRIDGE_URL });
+        rosRef.current = ros;
 
-        wsRef.current.onmessage = (event) => {
-          try {
-            const data = JSON.parse(event.data);
-            if (data.type === 'odom') {
-              setTelemetry(prev => ({ ...prev, x: data.x, y: data.y }));
-            } else if (data.type === 'imu') {
-              setTelemetry(prev => ({ ...prev, gz: data.gz }));
-            }
-          } catch (e) {
-            console.error("WS error", e);
-          }
-        };
+        ros.on('connection', () => {
+          if (isMounted) setStatus('Bağlandı');
+          console.log('[ROS] rosbridge bağlandı');
+        });
 
-        wsRef.current.onclose = () => {
-          if (isMounted) {
-            setStatus('Bağlantı kesildi');
+        ros.on('error', (err) => {
+          console.error('[ROS] rosbridge hata:', err);
+          if (isMounted) setStatus('ROS Bağlantı Hatası');
+        });
+
+        ros.on('close', () => {
+          if (isMounted) setStatus('Bağlantı kesildi');
+        });
+
+        cmdVelRef.current = new window.ROSLIB.Topic({
+          ros,
+          name: `/${ns}/cmd_vel_web`,
+          messageType: 'web_ros_custom_msgs/AuthorizedTwist',
+        });
+
+        hbRosRef.current = new window.ROSLIB.Topic({
+          ros,
+          name: `/${ns}/session/heartbeat`,
+          messageType: 'std_msgs/String',
+        });
+
+        hbRosTimer.current = setInterval(() => {
+          if (hbRosRef.current && tokenRef.current) {
+            hbRosRef.current.publish(new window.ROSLIB.Message({ data: tokenRef.current }));
           }
-        };
+        }, 333);
+
+        const odomTopic = new window.ROSLIB.Topic({
+          ros,
+          name: `/${ns}/odom`,
+          messageType: 'nav_msgs/Odometry',
+        });
+
+        odomTopic.subscribe((msg) => {
+          setTelemetry(prev => ({
+            ...prev,
+            x: parseFloat(msg.pose.pose.position.x.toFixed(3)),
+            y: parseFloat(msg.pose.pose.position.y.toFixed(3)),
+          }));
+        });
+
+        const imuTopic = new window.ROSLIB.Topic({
+          ros,
+          name: `/${ns}/imu`,
+          messageType: 'sensor_msgs/Imu',
+        });
+
+        imuTopic.subscribe((msg) => {
+          setTelemetry(prev => ({
+            ...prev,
+            gz: parseFloat(msg.angular_velocity.z.toFixed(3)),
+          }));
+        });
 
       } catch (err) {
         if (isMounted) {
@@ -92,8 +151,9 @@ function ControlPanelPage() {
 
     return () => {
       isMounted = false;
+      if (hbRosTimer.current) clearInterval(hbRosTimer.current);
       if (heartbeatTimer.current) clearInterval(heartbeatTimer.current);
-      if (wsRef.current) wsRef.current.close();
+      if (rosRef.current) rosRef.current.close();
       if (currentToken) {
         releaseRosRobot(rosRobotId, currentToken).catch(() => {});
       }
@@ -118,6 +178,8 @@ function ControlPanelPage() {
     );
   }
 
+  const isConnected = status === 'Bağlandı';
+
   return (
     <div className="control-station">
       <header className="control-header">
@@ -125,17 +187,16 @@ function ControlPanelPage() {
           <button className="back-btn" onClick={() => navigate('/user/kontrol')}>← Ayrıl</button>
           <h2>{robot?.nickname || robot?.name || 'Robot'} Kontrol Paneli</h2>
         </div>
-        <div className={`connection-status ${status === 'Bağlandı' ? 'connected' : 'connecting'}`}>
+        <div className={`connection-status ${isConnected ? 'connected' : 'connecting'}`}>
           <div
             className="status-dot"
-            style={{ backgroundColor: status === 'Bağlandı' ? '#4ade80' : '#f59e0b' }}
+            style={{ backgroundColor: isConnected ? '#4ade80' : '#f59e0b' }}
           ></div>
           {status}
         </div>
       </header>
 
       <div className="control-grid">
-        {/* Sol Panel: Kamera Akışı */}
         <div className="panel camera-panel">
           <div className="panel-header">Ana Kamera (Gazebo)</div>
           <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
@@ -156,7 +217,6 @@ function ControlPanelPage() {
           </div>
         </div>
 
-        {/* Sağ Panel: Telemetri ve Kontrol */}
         <div className="panel side-panel">
           <div className="panel-section">
             <div className="panel-header">Telemetri Verileri</div>
@@ -181,26 +241,26 @@ function ControlPanelPage() {
             <div className="joystick-container">
               <button
                 className="joy-btn joy-up"
-                disabled={status !== 'Bağlandı'}
+                disabled={!isConnected}
                 onMouseDown={() => sendCommand('FORWARD')}
                 onMouseUp={() => sendCommand('STOP')}
               >▲</button>
               <button
                 className="joy-btn joy-left"
-                disabled={status !== 'Bağlandı'}
+                disabled={!isConnected}
                 onMouseDown={() => sendCommand('LEFT')}
                 onMouseUp={() => sendCommand('STOP')}
               >◀</button>
               <div className="joy-center"></div>
               <button
                 className="joy-btn joy-right"
-                disabled={status !== 'Bağlandı'}
+                disabled={!isConnected}
                 onMouseDown={() => sendCommand('RIGHT')}
                 onMouseUp={() => sendCommand('STOP')}
               >▶</button>
               <button
                 className="joy-btn joy-down"
-                disabled={status !== 'Bağlandı'}
+                disabled={!isConnected}
                 onMouseDown={() => sendCommand('BACKWARD')}
                 onMouseUp={() => sendCommand('STOP')}
               >▼</button>
@@ -210,7 +270,7 @@ function ControlPanelPage() {
           <div className="panel-section action-section">
             <button
               className="danger-button full-width"
-              disabled={status !== 'Bağlandı'}
+              disabled={!isConnected}
               onClick={() => sendCommand('ESTOP')}
             >
               ACİL DURDURMA (E-STOP)

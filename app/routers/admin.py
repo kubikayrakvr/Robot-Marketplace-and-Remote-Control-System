@@ -240,20 +240,25 @@ def delete_catalog_item(
     db: Session = Depends(get_db),
     _: User = Depends(get_current_admin)
 ):
-    """Bir robot modelini ve ona bağlı tüm envanteri siler"""
     robot = db.query(RobotCatalog).filter(RobotCatalog.id == robot_id).first()
     if not robot:
         raise HTTPException(status_code=404, detail="Robot modeli bulunamadı")
+
+    # Siparişi olan robotları tamamen silmek yerine pasife al
+    from app.models.shop import OrderItem
+    has_orders = db.query(OrderItem).filter(OrderItem.product_id == robot_id).first()
     
-    # Bağlı envanterleri bul
+    if has_orders:
+        robot.is_available = False
+        db.commit()
+        return {"message": "Robota ait siparişler mevcut olduğundan silme yerine pasife alındı."}
+
     inventories = db.query(RobotInventory).filter(RobotInventory.catalog_id == robot_id).all()
-    
-    # Önce UserRobot'ları sonra envanterleri sil (Manuel cleanup)
     for inv in inventories:
         if inv.user_robot:
             db.delete(inv.user_robot)
         db.delete(inv)
-        
+    
     db.delete(robot)
     db.commit()
     return {"message": "Robot modeli ve bağlı tüm birimler silindi"}
