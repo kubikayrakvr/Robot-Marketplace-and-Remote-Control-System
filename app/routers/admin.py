@@ -262,3 +262,31 @@ def delete_catalog_item(
     db.delete(robot)
     db.commit()
     return {"message": "Robot modeli ve bağlı tüm birimler silindi"}
+
+# --- KULLANICI SİLME ---
+
+@router.delete("/kullanıcılar/{user_id}")
+def delete_user(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_admin: User = Depends(get_current_admin)
+):
+    """Kullanıcıyı ve robotlarını siler"""
+    if user_id == current_admin.id:
+        raise HTTPException(status_code=400, detail="Kendinizi silemezsiniz")
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
+
+    from app.models.robot import UserRobot
+    from app.models.shop import Order
+
+    # UserRobot kayıtlarını sil
+    db.query(UserRobot).filter(UserRobot.user_id == user_id).delete()
+    # Siparişleri pasife al
+    db.query(Order).filter(Order.user_id == user_id).update({"status": "cancelled"})
+    # Kullanıcıyı pasife al
+    user.is_active = False
+    db.commit()
+    return {"message": "Kullanıcı pasife alındı, robotları silindi"}

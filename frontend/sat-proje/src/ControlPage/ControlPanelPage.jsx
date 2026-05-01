@@ -1,3 +1,4 @@
+
 import '../roslib.min.js';
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -34,10 +35,10 @@ function ControlPanelPage() {
   const sendCommand = (command) => {
     const vel = { linear: { x: 0, y: 0, z: 0 }, angular: { x: 0, y: 0, z: 0 } };
 
-    if (command === 'FORWARD')  vel.linear.x  =  0.3;
-    if (command === 'BACKWARD') vel.linear.x  = -0.3;
-    if (command === 'LEFT')     vel.angular.z =  0.5;
-    if (command === 'RIGHT')    vel.angular.z = -0.5;
+    if (command === 'FORWARD')  vel.linear.x  =  1.0;
+    if (command === 'BACKWARD') vel.linear.x  = -1.0;
+    if (command === 'LEFT')     vel.angular.z =  1.5;
+    if (command === 'RIGHT')    vel.angular.z = -1.5;
 
     if (cmdVelRef.current && tokenRef.current) {
       cmdVelRef.current.publish(new window.ROSLIB.Message({
@@ -69,7 +70,7 @@ function ControlPanelPage() {
         tokenRef.current = token;
         setSessionToken(token);
 
-        // FastAPI heartbeat
+        // FastAPI heartbeat (session TTL)
         heartbeatTimer.current = setInterval(() => {
           heartbeatRosRobot(rosRobotId, token).catch(err => {
             console.error('FastAPI heartbeat error', err);
@@ -81,8 +82,58 @@ function ControlPanelPage() {
         rosRef.current = ros;
 
         ros.on('connection', () => {
-          if (isMounted) setStatus('Bağlandı');
+          if (!isMounted) return;
+          setStatus('Bağlandı');
           console.log('[ROS] rosbridge bağlandı');
+
+          // Komut topic'i
+          cmdVelRef.current = new window.ROSLIB.Topic({
+            ros,
+            name: `/${ns}/cmd_vel_web`,
+            messageType: 'web_ros_custom_msgs/AuthorizedTwist',
+          });
+
+          // Heartbeat topic'i (~3Hz)
+          hbRosRef.current = new window.ROSLIB.Topic({
+            ros,
+            name: `/${ns}/session/heartbeat`,
+            messageType: 'std_msgs/String',
+          });
+
+          hbRosTimer.current = setInterval(() => {
+            if (hbRosRef.current && tokenRef.current) {
+              hbRosRef.current.publish(new window.ROSLIB.Message({ data: tokenRef.current }));
+            }
+          }, 333);
+
+          // Odom telemetrisi
+          const odomTopic = new window.ROSLIB.Topic({
+            ros,
+            name: `/${ns}/odom`,
+            messageType: 'nav_msgs/Odometry',
+          });
+
+          odomTopic.subscribe((msg) => {
+            setTelemetry(prev => ({
+              ...prev,
+              x: parseFloat(msg.pose.pose.position.x.toFixed(3)),
+              y: parseFloat(msg.pose.pose.position.y.toFixed(3)),
+            }));
+          });
+
+          // IMU telemetrisi
+          const imuTopic = new window.ROSLIB.Topic({
+            ros,
+            name: `/${ns}/imu`,
+            messageType: 'sensor_msgs/Imu',
+          });
+
+          imuTopic.subscribe((msg) => {
+            setTelemetry(prev => ({
+              ...prev,
+              gz: parseFloat(msg.angular_velocity.z.toFixed(3)),
+            }));
+          });
         });
 
         ros.on('error', (err) => {
@@ -92,51 +143,6 @@ function ControlPanelPage() {
 
         ros.on('close', () => {
           if (isMounted) setStatus('Bağlantı kesildi');
-        });
-
-        cmdVelRef.current = new window.ROSLIB.Topic({
-          ros,
-          name: `/${ns}/cmd_vel_web`,
-          messageType: 'web_ros_custom_msgs/AuthorizedTwist',
-        });
-
-        hbRosRef.current = new window.ROSLIB.Topic({
-          ros,
-          name: `/${ns}/session/heartbeat`,
-          messageType: 'std_msgs/String',
-        });
-
-        hbRosTimer.current = setInterval(() => {
-          if (hbRosRef.current && tokenRef.current) {
-            hbRosRef.current.publish(new window.ROSLIB.Message({ data: tokenRef.current }));
-          }
-        }, 333);
-
-        const odomTopic = new window.ROSLIB.Topic({
-          ros,
-          name: `/${ns}/odom`,
-          messageType: 'nav_msgs/Odometry',
-        });
-
-        odomTopic.subscribe((msg) => {
-          setTelemetry(prev => ({
-            ...prev,
-            x: parseFloat(msg.pose.pose.position.x.toFixed(3)),
-            y: parseFloat(msg.pose.pose.position.y.toFixed(3)),
-          }));
-        });
-
-        const imuTopic = new window.ROSLIB.Topic({
-          ros,
-          name: `/${ns}/imu`,
-          messageType: 'sensor_msgs/Imu',
-        });
-
-        imuTopic.subscribe((msg) => {
-          setTelemetry(prev => ({
-            ...prev,
-            gz: parseFloat(msg.angular_velocity.z.toFixed(3)),
-          }));
         });
 
       } catch (err) {
