@@ -131,7 +131,7 @@ class RobotSpawner(Node):
             f"/{ns}/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image",
             f"/{ns}/camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
             f"/{ns}/imu@sensor_msgs/msg/Imu[gz.msgs.IMU",
-            f"/{ns}/pose@geometry_msgs/msg/Pose[gz.msgs.Pose"
+            f"/{ns}/ground_truth@geometry_msgs/msg/Pose[gz.msgs.Pose"
         ]
 
         # 3. Define the controller command.
