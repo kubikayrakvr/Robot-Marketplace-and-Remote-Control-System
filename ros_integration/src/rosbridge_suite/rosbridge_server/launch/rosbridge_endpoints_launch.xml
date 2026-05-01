@@ -2,7 +2,7 @@
   <arg name="rosbridge_port" default="9090" />
   <arg name="rosbridge_address" default="0.0.0.0" />
   
-  <arg name="video_port" default="8090" />
+  <arg name="video_port" default="8080" />
   <arg name="video_address" default="0.0.0.0" />
 
   <include file="$(find-pkg-share rosbridge_server)/launch/rosbridge_websocket_launch.xml">
