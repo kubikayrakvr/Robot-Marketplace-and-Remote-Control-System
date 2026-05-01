@@ -30,4 +30,5 @@ USER BROWSER (React.js)
     │  - Camera Stream (MJPEG)  │
     └───────────────────────────┘
 ```
-## Veritabanı Güncellemeleri\ndocker exec sat0_postgres psql -U user -d robot_db < migrations.sql
+Veritabanı Güncellemeleri:
+docker exec sat0_postgres psql -U user -d robot_db < migrations.sql

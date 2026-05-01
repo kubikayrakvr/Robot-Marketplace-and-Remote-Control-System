@@ -1,0 +1,19 @@
+<launch>
+  <arg name="rosbridge_port" default="9090" />
+  <arg name="rosbridge_address" default="0.0.0.0" />
+  
+  <arg name="video_port" default="8080" />
+  <arg name="video_address" default="0.0.0.0" />
+
+  <include file="$(find-pkg-share rosbridge_server)/launch/rosbridge_websocket_launch.xml">
+    <arg name="port" value="$(var rosbridge_port)" />
+    <arg name="address" value="$(var rosbridge_address)" />
+  </include>
+
+
+  <node pkg="web_video_server" exec="web_video_server" name="web_video_server" output="screen">
+    <param name="port" value="$(var video_port)" />
+    <param name="address" value="$(var video_address)" />
+  </node>
+
+</launch>
