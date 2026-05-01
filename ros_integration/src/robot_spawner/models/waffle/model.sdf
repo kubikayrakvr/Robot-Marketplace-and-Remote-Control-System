@@ -370,7 +370,7 @@
       <sensor name="camera" type="camera">
         <always_on>true</always_on>
         <visualize>false</visualize>
-        <update_rate>20</update_rate>
+        <update_rate>10</update_rate>
         <topic>__ROBOT_NAMESPACE__/camera/image_raw</topic>
         <gz_frame_id>camera_rgb_frame</gz_frame_id>
         <camera name="intel_realsense_r200">
