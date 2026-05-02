@@ -40,11 +40,6 @@ function UserPage() {
             <p className="user-subtitle">
               Robot ekosistemine baglisin. Simdi robot satin alabilir, etkinlestirip kontrol paneline gecebilirsin.
             </p>
-            {!user.security_question && (
-              <div style={{ marginTop: '1rem', padding: '0.75rem 1rem', background: '#991b1b33', border: '1px solid #991b1b', borderRadius: '8px', color: '#f87171', fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <span>🛡️ <strong>Hesap Güvenliği:</strong> Henüz bir güvenlik sorusu belirlemediniz. Şifrenizi unutursanız kurtarabilmeniz için lütfen <button onClick={() => navigate('/user/profil')} style={{ background: 'none', border: 'none', color: '#fff', textDecoration: 'underline', cursor: 'pointer', padding: 0, fontSize: 'inherit' }}>profilinizden bir soru seçin.</button></span>
-              </div>
-            )}
           </div>
           <div className="user-meta">
             <div className="avatar">{displayName.slice(0, 1).toUpperCase()}</div>

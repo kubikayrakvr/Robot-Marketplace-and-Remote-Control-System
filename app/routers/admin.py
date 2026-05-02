@@ -266,12 +266,12 @@ def delete_catalog_item(
 # --- KULLANICI SİLME ---
 
 @router.delete("/kullanıcılar/{user_id}")
+@router.delete("/kullanıcılar/{user_id}")
 def delete_user(
     user_id: int,
     db: Session = Depends(get_db),
     current_admin: User = Depends(get_current_admin)
 ):
-    """Kullanıcıyı ve robotlarını siler"""
     if user_id == current_admin.id:
         raise HTTPException(status_code=400, detail="Kendinizi silemezsiniz")
     
@@ -281,12 +281,21 @@ def delete_user(
 
     from app.models.robot import UserRobot
     from app.models.shop import Order
+    from app.models.report import UserReport
+    
+    db.query(UserReport).filter(UserReport.user_id == user_id).delete()
+    db.query(AuditLog).filter(AuditLog.user_id == user_id).delete()
+    db.query(UserRobot).filter(UserRobot.user_id == user_id).delete()
+    db.query(Order).filter(Order.user_id == user_id).update({"status": "CANCELLED"})
+    db.delete(user)
+    db.commit()
+    return {"message": "Kullanıcı silindi"}
 
     # UserRobot kayıtlarını sil
     db.query(UserRobot).filter(UserRobot.user_id == user_id).delete()
     # Siparişleri pasife al
-    db.query(Order).filter(Order.user_id == user_id).update({"status": "cancelled"})
-    # Kullanıcıyı pasife al
-    user.is_active = False
+    db.query(Order).filter(Order.user_id == user_id).update({"status": "CANCELLED"})
+    # Kullanıcıyı sil
+    db.delete(user)
     db.commit()
-    return {"message": "Kullanıcı pasife alındı, robotları silindi"}
+    return {"message": "Kullanıcı tamamen silindi"}

@@ -205,3 +205,9 @@ export function resolveReport(reportId) {
     method: 'PATCH',
   });
 }
+
+export function deleteUser(userId) {
+  return adminFetch(`/api/admin/kullanıcılar/${userId}`, {
+    method: 'DELETE',
+  });
+}

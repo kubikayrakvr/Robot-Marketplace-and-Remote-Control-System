@@ -1,7 +1,7 @@
+import { fetchUsers, deleteUser } from './adminApi';
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import AdminLayout from './AdminLayout';
-import { fetchUsers } from './adminApi';
 
 function AdminUsersPage() {
   const [users, setUsers] = useState([]);
@@ -19,6 +19,16 @@ function AdminUsersPage() {
         setLoading(false);
       });
   }, []);
+
+  const handleDelete = async (id, username) => {
+    if (!window.confirm(`${username} kullanıcısını silmek istediğinize emin misiniz?`)) return;
+    try {
+      await deleteUser(id);
+      setUsers(prev => prev.filter(u => u.id !== id));
+    } catch (err) {
+      alert(err.message);
+    }
+  };
 
   const adminCount = users.filter(u => u.is_admin).length;
 
@@ -104,6 +114,14 @@ function AdminUsersPage() {
                       <Link to={`/admin/user/bilgi/${user.id}`} className="admin-btn info">
                         👁 Bilgi
                       </Link>
+		      {!user.is_admin && (
+		        <button
+		          className="admin-btn delete"
+			  onClick={() => handleDelete(user.id, user.username)}
+		      >
+		         🗑 Sil
+		      </button>
+		      )}
                     </div>
                   </td>
                 </tr>

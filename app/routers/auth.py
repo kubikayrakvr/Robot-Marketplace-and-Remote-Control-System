@@ -16,9 +16,12 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 @router.post("/register", response_model=UserResponse)
 def register(data: UserRegister, db: Session = Depends(get_db)):
+    if db.query(User).filter(User.username == data.username).first():
+        raise HTTPException(status_code=400, detail="Kullanıcı adı zaten kullanılıyor")
     if db.query(User).filter(User.email == data.email).first():
         raise HTTPException(status_code=400, detail="E-posta zaten kayıtlı")
-    
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Şifre en az 6 karakter olmalıdır")
     new_user = User(
         email=data.email,
         username=data.username,
@@ -28,7 +31,6 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_user)
     
-    # 🛡️ Başarılı kayıt işlemini loglayalım
     reg_log = AuditLog(
         user_id=new_user.id,
         action="USER_REGISTERED",

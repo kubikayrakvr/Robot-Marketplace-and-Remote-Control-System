@@ -5,13 +5,13 @@ DB_USER="user"
 DB_NAME="robot_db"
 THRESHOLD=5            # 10 dakika içindeki hata sınırı
 WINDOW="10 minutes"    # Kontrol edilecek zaman aralığı
-MY_IP="KENDI_IP_ADRESIN" # BURAYA KENDİ IP ADRESİNİ YAZ (Banlanmamak için)
+MY_IP="49.13.13.48" # BURAYA KENDİ IP ADRESİNİ YAZ (Banlanmamak için)
 
 echo "[$(date)] --- Siber Güvenlik Analizi Başlatıldı ---"
 
 # 1. Veritabanından Şüpheli IP'leri Çek
 # Şüpheli eylemler: Yetkisiz erişim, Hız sınırı aşımı, Başarısız girişler
-BAD_IPS=$(docker exec -t $DB_CONTAINER psql -U $DB_USER -d $DB_NAME -t -c \
+BAD_IPS=$(docker exec -i $DB_CONTAINER psql -U $DB_USER -d $DB_NAME -t -c \
 "SELECT ip_address FROM audit_logs 
  WHERE (action LIKE '%UNAUTHORIZED%' OR action LIKE '%LIMIT%' OR action LIKE '%FAILED%') 
  AND timestamp > NOW() - INTERVAL '$WINDOW' 
