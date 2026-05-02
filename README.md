@@ -32,3 +32,12 @@ USER BROWSER (React.js)
 ```
 Veritabanı Güncellemeleri:
 docker exec sat0_postgres psql -U user -d robot_db < migrations.sql
+
+#banlı kullanıcıları listele
+iptables -L DOCKER-USER -n --line-numbers
+
+# Belirli bir IP'nin ban'ını kaldır
+iptables -D DOCKER-USER -s IP_ADRESI -j DROP
+
+# Veya satır numarasıyla (iptables -L ile gelen numarayı kullan)
+iptables -D DOCKER-USER SATIR_NUMARASI
