@@ -2,10 +2,10 @@ from datetime import datetime, timezone, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from app.models.audit import AuditLog
 from app.database import get_db
 from app.models.user import User
-from app.schemas.user import UserRegister, UserResponse, UserLogin, SecurityResetConfirm
+from app.models.audit import AuditLog  # 🛡️ Siber güvenlik loglaması için eklendi
+from app.schemas.user import UserRegister, UserResponse, UserLogin
 from app.schemas.auth import ForgotPasswordRequest, ResetPasswordRequest, TokenRefreshRequest
 from app.schemas.token import Token
 from app.core.security import hash_password, verify_password, create_token, decode_token
@@ -22,32 +22,51 @@ def register(data: UserRegister, db: Session = Depends(get_db)):
     new_user = User(
         email=data.email,
         username=data.username,
-        hashed_password=hash_password(data.password),
-        security_question=data.security_question,
-        security_answer=hash_password(data.security_answer.lower().strip()) # Normalize and hash
+        hashed_password=hash_password(data.password)
     )
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
+    
+    # 🛡️ Başarılı kayıt işlemini loglayalım
+    reg_log = AuditLog(
+        user_id=new_user.id,
+        action="USER_REGISTERED",
+        details={"username": new_user.username, "email": new_user.email}
+    )
+    db.add(reg_log)
+    db.commit()
+    
     return new_user
 
 @router.post("/login", response_model=Token)
 @limiter.limit("5/minute")
 def login(request: Request, data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(User.email == data.email).first()
+    
+    # 🛡️ SİBER GÜVENLİK: Şifre yanlışsa veya kullanıcı yoksa başarısız denemeyi logla
     if not user or not verify_password(data.password, user.hashed_password):
-        log = AuditLog(
-            user_id=user.id if user else None,
+        failed_log = AuditLog(
+            user_id=user.id if user else None, # Kullanıcı yoksa ID boş kalır[cite: 16]
             action="LOGIN_FAILED",
             ip_address=request.client.host,
-            details={"email": data.email, "reason": "Hatalı şifre veya e-posta"}
+            details={"attempted_email": data.email, "reason": "Hatalı şifre veya kullanıcı bulunamadı"}
         )
-        db.add(log)
+        db.add(failed_log)
         db.commit()
         raise HTTPException(status_code=401, detail="Hatalı bilgiler")
-
+    
     access_token = create_token(data={"sub": str(user.id)}, token_type="access")
     refresh_token = create_token(data={"sub": str(user.id)}, token_type="refresh")
+    
+    # 🛡️ Başarılı girişi loglayalım[cite: 16, 20]
+    success_log = AuditLog(
+        user_id=user.id,
+        action="LOGIN_SUCCESS",
+        ip_address=request.client.host
+    )
+    db.add(success_log)
+    db.commit()
     
     return {"access_token": access_token, "refresh_token": refresh_token, "token_type": "bearer"}
 
@@ -84,11 +103,20 @@ def forgot_password(request: Request, data: ForgotPasswordRequest, db: Session =
         reset_token = create_token(data={"sub": str(user.id)}, token_type="password_reset")
         # Gerçek SMTP entegrasyonu gelene kadar simülasyon:
         print(f"DEBUG: Password Reset Token for {user.email}: {reset_token}")
+        
+        # 🛡️ Şifre sıfırlama isteğini logla[cite: 16]
+        db.add(AuditLog(
+            user_id=user.id,
+            action="PASSWORD_RESET_REQUESTED",
+            ip_address=request.client.host
+        ))
+        db.commit()
+        
     return {"message": "Sıfırlama linki e-posta adresinize gönderildi (varsa)."}
 
 @router.post("/reset-password")
 def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
-    payload = decode_token(data.token)
+    payload = decode_token(data.reset_token)
     if not payload or payload.get("type") != "password_reset":
         raise HTTPException(status_code=400, detail="Geçersiz veya süresi dolmuş sıfırlama token'ı")
     
@@ -97,29 +125,12 @@ def reset_password(data: ResetPasswordRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
     
     user.hashed_password = hash_password(data.new_password)
+    
+    # 🛡️ Şifre değişim başarısını logla[cite: 16]
+    db.add(AuditLog(
+        user_id=user.id,
+        action="PASSWORD_RESET_SUCCESS"
+    ))
+    
     db.commit()
     return {"message": "Şifreniz başarıyla güncellendi."}
-
-# --- GÜVENLİK SORUSU İLE ŞİFRE SIFIRLAMA ---
-
-@router.get("/security-question/{email}")
-def get_security_question(email: str, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
-    if not user.security_question:
-        raise HTTPException(status_code=400, detail="Bu kullanıcı için güvenlik sorusu ayarlanmamış. Lütfen destekle iletişime geçin.")
-    return {"security_question": user.security_question}
-
-@router.post("/reset-password-security")
-def reset_password_security(data: SecurityResetConfirm, db: Session = Depends(get_db)):
-    user = db.query(User).filter(User.email == data.email).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="Kullanıcı bulunamadı")
-    
-    if not user.security_answer or not verify_password(data.security_answer.lower().strip(), user.security_answer):
-        raise HTTPException(status_code=400, detail="Güvenlik sorusu cevabı hatalı")
-    
-    user.hashed_password = hash_password(data.new_password)
-    db.commit()
-    return {"message": "Şifreniz başarıyla sıfırlandı. Yeni şifrenizle giriş yapabilirsiniz."}

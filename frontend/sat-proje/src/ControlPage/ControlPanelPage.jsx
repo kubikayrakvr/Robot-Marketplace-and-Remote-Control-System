@@ -1,4 +1,3 @@
-
 import '../roslib.min.js';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -14,7 +13,7 @@ import {
 } from '../api/rosApi';
 
 const ROSBRIDGE_URL = 'ws://49.13.13.48:9090';
-const PUBLISH_INTERVAL_MS = 66;     // ~15 Hz cmd_vel
+const PUBLISH_INTERVAL_MS = 66;      // ~15 Hz cmd_vel
 const ROS_HB_INTERVAL_MS = 3000;
 const API_HB_INTERVAL_MS = 10000;
 const PING_INTERVAL_MS = 1000;
@@ -35,25 +34,14 @@ function ControlPanelPage() {
   const [sessionToken, setSessionToken] = useState(null);
   const [status, setStatus] = useState('Bağlanıyor...');
   const [error, setError] = useState(null);
-  // Sensor configuration of the connected robot. Until the detail fetch
-  // completes we render the layout with all three sensors assumed present
-  // (the most common Waffle case) — once the response lands the flag flips
-  // and the layout adapts. Concrete values come from the backend
-  // /ros/robot/{id} response, which is sourced from _TYPE_SENSORS.
+
+  // 🕒 HAREKETSİZLİK TAKİBİ İÇİN EKLENEN STATE VE REF
+  const [showIdlePopup, setShowIdlePopup] = useState(false);
+  const lastActivityRef = useRef(Date.now());
+
   const [sensors, setSensors] = useState(null);
-  // Starts `true` so the drive controls are disabled until the first odom
-  // arrives. This gates teleop on the spawn-then-online lifecycle: claim
-  // succeeds → spawn signal fires → robot enters ROS → odom flows → drive
-  // enables. The watchdog flips this back to true if telemetry stalls.
   const [isStale, setIsStale] = useState(true);
-  // Sticky flag — false until the first odom arrives, true forever after.
-  // Used to disambiguate "still spawning" from "lost mid-session" in the
-  // status pill. Kept as state (not a ref) because React 19 rejects ref
-  // reads during render.
   const [hasEverReceivedTelemetry, setHasEverReceivedTelemetry] = useState(false);
-  // Starts `true` so we render the odom fallback before any pose has arrived.
-  // Flips to false on the first pose, back to true when the watchdog tick
-  // notices it's been longer than POSE_STALE_MS since the last update.
   const [isPoseStale, setIsPoseStale] = useState(true);
 
   // ── Telemetry state (relay-driven) ───────────────────────────────────
@@ -90,15 +78,8 @@ function ControlPanelPage() {
   const pingTimer = useRef(null);
   const watchdogTimer = useRef(null);
 
-  // Last odom arrival timestamp — used by the watchdog to detect stalls
-  // without depending on odom state (which would require restarting the
-  // interval on every odom message).
   const lastOdomTsRef = useRef(0);
   const lastPoseTsRef = useRef(0);
-  // Edge detector — true while the watchdog has us in the stale state.
-  // Lets the watchdog tick fire emergencyStop *once* on the transition
-  // into stale, instead of routing through a [isStale]-keyed useEffect
-  // (which would call setState synchronously inside an effect).
   const wasStaleRef = useRef(false);
 
   // ── DOM refs ─────────────────────────────────────────────────────────
@@ -107,10 +88,6 @@ function ControlPanelPage() {
   const canvasRef = useRef(null);
   const radarLegendRef = useRef(null);
   const radarClosestRef = useRef(null);
-
-  // The latest scan is held in a ref — 5 Hz scan updates would otherwise
-  // rerender the entire panel just to hand a 360-element array to a
-  // canvas. We paint directly from the ref instead.
   const latestScanRef = useRef(null);
 
   useEffect(() => { linSpeedRef.current = linSpeed; }, [linSpeed]);
@@ -118,11 +95,17 @@ function ControlPanelPage() {
 
   // ── Drive command helpers ────────────────────────────────────────────
   const setDesiredVel = useCallback((linear, angular) => {
+    // 🕒 HAREKETSİZLİK TAKİBİ: Komut verildiği an zamanlayıcıyı sıfırla
+    lastActivityRef.current = Date.now();
+    
     desiredVelRef.current = { linear, angular };
     setCmdVel({ linear, angular });
   }, []);
 
   const emergencyStop = useCallback(() => {
+    // 🕒 HAREKETSİZLİK TAKİBİ: Kullanıcı butona bastığı için aktiftir
+    lastActivityRef.current = Date.now();
+
     pressedKeysRef.current.clear();
     desiredVelRef.current = { linear: 0, angular: 0 };
     setCmdVel({ linear: 0, angular: 0 });
@@ -133,6 +116,22 @@ function ControlPanelPage() {
       }));
     }
   }, []);
+
+  // 🕒 HAREKETSİZLİK TAKİBİ: Arka planda süreyi kontrol eden kontrolcü[cite: 77]
+  useEffect(() => {
+    const idleInterval = setInterval(() => {
+      // Sadece bağlantı varken ve popup kapalıyken kontrol et
+      if (status === 'Bağlandı' && !showIdlePopup) {
+        const secondsIdle = (Date.now() - lastActivityRef.current) / 1000;
+        if (secondsIdle > 120) { // 2 dakika sınırı[cite: 77]
+          emergencyStop(); // Önce robotu durdur
+          setShowIdlePopup(true);
+        }
+      }
+    }, 5000); // 5 saniyede bir kontrol et
+
+    return () => clearInterval(idleInterval);
+  }, [status, showIdlePopup, emergencyStop]);
 
   const recomputeFromKeys = useCallback(() => {
     const keys = pressedKeysRef.current;
@@ -149,7 +148,6 @@ function ControlPanelPage() {
   const dpadStart = useCallback((linear, angular) => setDesiredVel(linear, angular), [setDesiredVel]);
   const dpadStop = useCallback(() => setDesiredVel(0, 0), [setDesiredVel]);
 
-  // ── Radar painter (direct DOM, zero React renders in the path) ───────
   const drawRadar = useCallback(() => {
     const canvas = canvasRef.current;
     const scan = latestScanRef.current;
@@ -165,7 +163,6 @@ function ControlPanelPage() {
     ctx.fillStyle = '#020617';
     ctx.fillRect(0, 0, W, H);
 
-    // Range rings
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.18)';
     ctx.lineWidth = 1;
     for (let i = 1; i <= 4; i++) {
@@ -174,7 +171,6 @@ function ControlPanelPage() {
       ctx.stroke();
     }
 
-    // Crosshair
     ctx.strokeStyle = 'rgba(56, 189, 248, 0.10)';
     ctx.beginPath();
     ctx.moveTo(cx, cy - R); ctx.lineTo(cx, cy + R);
@@ -199,13 +195,11 @@ function ControlPanelPage() {
       ctx.fillRect(px - 1, py - 1, 3, 3);
     }
 
-    // Robot center marker
     ctx.fillStyle = '#4ade80';
     ctx.beginPath();
     ctx.arc(cx, cy, 4, 0, Math.PI * 2);
     ctx.fill();
 
-    // Stat readouts via direct DOM mutation (no setState)
     if (radarLegendRef.current) {
       radarLegendRef.current.textContent =
         `${validCount} pts · ${scan.range_max.toFixed(1)} m menzil`;
@@ -217,7 +211,6 @@ function ControlPanelPage() {
     }
   }, []);
 
-  // ── WASD keyboard + Spacebar e-stop ──────────────────────────────────
   useEffect(() => {
     function onKeyDown(e) {
       const k = e.key.toLowerCase();
@@ -246,7 +239,6 @@ function ControlPanelPage() {
     };
   }, [recomputeFromKeys, emergencyStop]);
 
-  // ── Virtual joystick (mouse + touch) ─────────────────────────────────
   useEffect(() => {
     const zone = joystickZoneRef.current;
     const knob = joystickKnobRef.current;
@@ -308,11 +300,6 @@ function ControlPanelPage() {
     };
   }, [setDesiredVel]);
 
-  // ── Best-effort session release on tab close ─────────────────────────
-  // The component's unmount cleanup uses fetch(), which the browser is free
-  // to abort during a page-unload. sendBeacon is queued at the OS level and
-  // guaranteed to dispatch, so the operator's slot is freed up the moment
-  // they close the tab instead of waiting for the 15 s session reaper.
   useEffect(() => {
     if (!sessionToken || !rosRobotId) return;
     const handler = () => sendBeaconRelease(rosRobotId, sessionToken);
@@ -320,11 +307,7 @@ function ControlPanelPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [sessionToken, rosRobotId]);
 
-  // ── Connect: claim → roslibjs (publish) + FastAPI relay (subscribe) ──
   useEffect(() => {
-    // No-op when the robot has no ROS binding — the missing-id error is
-    // surfaced in render via `displayError` so we don't have to setState
-    // synchronously inside this effect.
     if (!rosRobotId) return;
 
     let isMounted = true;
@@ -333,9 +316,6 @@ function ControlPanelPage() {
 
     async function connect() {
       try {
-        // Parallel: claim the session + fetch sensor metadata. The detail
-        // call adds nothing critical to the claim path so it goes alongside,
-        // not before — the claim response is what blocks teleop start.
         const [{ token }, detail] = await Promise.all([
           claimRosRobot(rosRobotId),
           fetchRosRobotById(rosRobotId).catch(() => null),
@@ -352,16 +332,6 @@ function ControlPanelPage() {
           setSensors(detail.sensors);
         }
 
-        // Session-keepalive ping to FastAPI (claim TTL).
-        //
-        // 403 (token mismatch — someone else stole our claim) and 404 (session
-        // not found — server forgot us, e.g. after a restart) are terminal:
-        // continuing to publish under a dead token would waste cycles and
-        // emit cmd_vel messages the C++ controller will silently drop. Stop
-        // every active timer and close the relay WS so no more telemetry is
-        // accepted, then surface a critical error. The operator returns to
-        // the selection page, the component unmounts, and the standard
-        // cleanup runs the final release call (idempotent if already gone).
         heartbeatTimer.current = setInterval(() => {
           heartbeatRosRobot(rosRobotId, token).catch(err => {
             if (err && (err.status === 403 || err.status === 404)) {
@@ -385,11 +355,6 @@ function ControlPanelPage() {
           });
         }, API_HB_INTERVAL_MS);
 
-        // 1. roslibjs — for the *outbound* path only:
-        //    cmd_vel_web (token-gated by the C++ controller),
-        //    session/heartbeat,
-        //    /ping (frontend publishes its own timestamp; the relay echoes
-        //          it back to us via FastAPI WS so we can compute RTT).
         const ros = new window.ROSLIB.Ros({ url: ROSBRIDGE_URL });
         rosRef.current = ros;
 
@@ -422,9 +387,6 @@ function ControlPanelPage() {
           }, ROS_HB_INTERVAL_MS);
 
           publishTimer.current = setInterval(() => {
-            // Defence in depth: even before isStale propagates through React,
-            // refuse to publish if telemetry has gone silent. Better to drop
-            // commands than to keep driving a robot we can't see.
             const last = lastOdomTsRef.current;
             if (last > 0 && Date.now() - last > ODOM_STALE_MS) return;
 
@@ -440,9 +402,6 @@ function ControlPanelPage() {
             }));
           }, PUBLISH_INTERVAL_MS);
 
-          // Latency probe — publish a timestamp; the relay subscribes to the
-          // same topic and forwards the rosbridge echo back to us, so the
-          // round-trip we measure mirrors the actual telemetry path.
           pingTimer.current = setInterval(() => {
             if (pingTopicRef.current) {
               pingTopicRef.current.publish(new window.ROSLIB.Message({
@@ -461,10 +420,6 @@ function ControlPanelPage() {
           if (isMounted) setStatus('Bağlantı kesildi');
         });
 
-        // 2. FastAPI relay WS — for the *inbound* telemetry path. All
-        //    sensor data (odom, imu, scan, ground_truth, collision, ping
-        //    echo) flows here so the backend can sever the stream the
-        //    moment a session is revoked.
         const ws = new WebSocket(getRosWebSocketUrl(rosRobotId, token));
         wsRef.current = ws;
 
@@ -473,21 +428,10 @@ function ControlPanelPage() {
           setStatus('Bağlandı');
           console.log('[relay] FastAPI telemetry WS açıldı');
 
-          // Start the watchdog only after the relay is up. Until the first
-          // odom/pose arrives we hold the corresponding flag at its initial
-          // value — otherwise `Date.now() - 0` would trip the stale guard
-          // immediately on a healthy connection.
-          //
-          // The same tick also re-evaluates pose freshness so the
-          // World↔Odom fallback can flip without us having to read
-          // Date.now() during render (React 19 forbids impure reads).
           watchdogTimer.current = setInterval(() => {
             const lastOdom = lastOdomTsRef.current;
             if (lastOdom > 0) {
               const stale = Date.now() - lastOdom > ODOM_STALE_MS;
-              // Edge: false → true. Scrub all in-flight commands so the
-              // robot won't lurch when telemetry returns — the operator
-              // must re-press to drive again.
               if (stale && !wasStaleRef.current) {
                 emergencyStop();
               }
@@ -511,10 +455,6 @@ function ControlPanelPage() {
             case 'odom':
               setOdom({ x: d.x, y: d.y, ts: Date.now() });
               lastOdomTsRef.current = Date.now();
-              // First odom after spawn — flip the stale guard immediately so
-              // drive controls light up without waiting for the next 1 Hz
-              // watchdog tick. Both updates bail out cheaply once they're
-              // already at their target value.
               setIsStale(prev => (prev ? false : prev));
               setHasEverReceivedTelemetry(prev => prev || true);
               break;
@@ -548,16 +488,9 @@ function ControlPanelPage() {
           }
         };
 
-        ws.onerror = (e) => {
-          console.warn('[relay] WS error', e);
-        };
-
         ws.onclose = (e) => {
           if (!isMounted) return;
           if (e.code === 4003) {
-            // Backend closed with the "session invalid" code — token was
-            // revoked or never matched. Surface a hard error rather than
-            // silently re-trying.
             setError('Oturum sunucu tarafından sonlandırıldı.');
           } else {
             setStatus('Telemetri akışı kesildi');
@@ -576,8 +509,6 @@ function ControlPanelPage() {
 
     return () => {
       isMounted = false;
-      // Clear timers BEFORE closing sockets so no in-flight publish or
-      // heartbeat fires after we've torn down its target.
       [publishTimer, hbRosTimer, heartbeatTimer, pingTimer, watchdogTimer].forEach((t) => {
         if (t.current) {
           clearInterval(t.current);
@@ -598,15 +529,10 @@ function ControlPanelPage() {
     };
   }, [rosRobotId, drawRadar, emergencyStop]);
 
-  // Sensor capabilities. While `sensors` is still null (detail fetch
-  // pending), assume the most-equipped configuration so the layout
-  // doesn't flash a smaller variant before the first paint.
   const sensorList = sensors ?? ['imu', 'scan', 'camera'];
   const hasCamera  = sensorList.includes('camera');
   const hasScan    = sensorList.includes('scan');
 
-  // Single source of truth for the error screen. The missing-rosRobotId case
-  // is derived (no setState) so the connect effect stays render-pure.
   const displayError = error
     ?? (rosRobotId ? null : 'Bu robot için tanımlı bir ROS ID bulunamadı.');
 
@@ -629,10 +555,6 @@ function ControlPanelPage() {
   }
 
   const isConnected = status === 'Bağlandı';
-  // Drive inputs are gated by both the connection AND the watchdog. E-stop
-  // intentionally only requires `isConnected` so it remains usable during a
-  // stall — better to send a "stop" the robot may not receive than to lock
-  // the user out entirely.
   const canDrive = isConnected && !isStale;
 
   const displayStatus = isStale
@@ -645,10 +567,6 @@ function ControlPanelPage() {
     ? (hasEverReceivedTelemetry ? 'disconnected' : 'connecting')
     : (isConnected ? 'connected' : 'connecting');
 
-  // Ground-truth-or-fallback: prefer wx/wy when pose is fresh, else odom.
-  // `isPoseStale` is maintained by the watchdog tick — keeping the read
-  // pure here lets render stay deterministic on its inputs (React 19's
-  // purity rule rejects calling Date.now() during render).
   const isWorldFresh = !isPoseStale && pose.ts > 0;
   const displayX = isWorldFresh ? pose.wx : odom.x;
   const displayY = isWorldFresh ? pose.wy : odom.y;
@@ -665,6 +583,27 @@ function ControlPanelPage() {
 
   return (
     <div className="control-station">
+      {/* 🕒 HAREKETSİZLİK TAKİBİ: Popup Modal Bileşeni[cite: 77] */}
+      {showIdlePopup && (
+        <div style={{
+          position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+          backgroundColor: 'rgba(0,0,0,0.85)', zIndex: 1000, display: 'flex',
+          alignItems: 'center', justifyContent: 'center', textAlign: 'center'
+        }}>
+          <div style={{ background: '#1e293b', padding: '2rem', borderRadius: '16px', border: '1px solid #334155', maxWidth: '400px' }}>
+            <h2>Hala Burada mısınız?</h2>
+            <p style={{ color: '#94a3b8', margin: '1rem 0' }}>Uzun süredir hareket tespit edilmedi. Robotun güvenliği için oturum kapatılacaktır.</p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button className="primary-button" style={{ flex: 1 }} onClick={() => {
+                lastActivityRef.current = Date.now();
+                setShowIdlePopup(false);
+              }}>Buradayım</button>
+              <button className="secondary-button" style={{ flex: 1 }} onClick={() => navigate('/user/kontrol')}>Ayrıl</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <header className="control-header">
         <div className="control-title">
           <button className="back-btn" onClick={() => navigate('/user/kontrol')}>← Ayrıl</button>
@@ -693,17 +632,7 @@ function ControlPanelPage() {
       </div>
 
       <div className="control-grid">
-        {/* Left column packs the visual sensor on top and the
-            IMU / small-radar row below. This keeps every readout in
-            one viewport — no scrolling — and absorbs the dead space
-            that used to sit below the Burger's promoted radar. */}
         <div className="visual-col">
-          {/* Top-left visual tile adapts to the robot's sensor loadout:
-                · Has camera → live MJPEG feed.
-                · No camera but has LIDAR → radar canvas promoted up,
-                  larger size for readability.
-                · Neither → a clear "no visual sensor" placeholder so
-                  the slot doesn't collapse and the grid stays balanced. */}
           {hasCamera ? (
             <div className="panel camera-panel">
               <div className="panel-header">Ana Kamera (Gazebo)</div>
@@ -746,9 +675,6 @@ function ControlPanelPage() {
             </div>
           )}
 
-          {/* IMU is always rendered. Small radar joins it side-by-side
-              when the camera occupied the top slot — when the radar was
-              already promoted up, the IMU spans the full row alone. */}
           <div className={`sensor-row${hasCamera && hasScan ? '' : ' single'}`}>
             <div className="panel imu-panel">
               <div className="panel-header">📡 IMU</div>
@@ -756,9 +682,9 @@ function ControlPanelPage() {
                 <SensorRow label="Yaw hızı"   value={(imu.gz * RAD_TO_DEG).toFixed(1)} unit="°/s" />
                 <SensorRow label="Pitch hızı" value={(imu.gy * RAD_TO_DEG).toFixed(1)} unit="°/s" />
                 <SensorRow label="Roll hızı"  value={(imu.gx * RAD_TO_DEG).toFixed(1)} unit="°/s" />
-                <SensorRow label="İvme X"     value={imu.ax.toFixed(2)}                unit="m/s²" />
-                <SensorRow label="İvme Y"     value={imu.ay.toFixed(2)}                unit="m/s²" />
-                <SensorRow label="İvme Z"     value={imu.az.toFixed(2)}                unit="m/s²" />
+                <SensorRow label="İvme X"      value={imu.ax.toFixed(2)}                unit="m/s²" />
+                <SensorRow label="İvme Y"      value={imu.ay.toFixed(2)}                unit="m/s²" />
+                <SensorRow label="İvme Z"      value={imu.az.toFixed(2)}                unit="m/s²" />
               </div>
             </div>
 
@@ -882,11 +808,6 @@ function ControlPanelPage() {
                     onTouchStart={(e) => { e.preventDefault(); dpadStart(0, angSpeed); }}
                     onTouchEnd={dpadStop}
                   >◀</button>
-                  {/* E-stop lives in the dpad's center cell — closer to
-                      the user's hand position than a separate row at the
-                      bottom of the panel. Always usable when connected,
-                      even mid-stall, so the operator can stop a runaway
-                      robot the moment they notice. */}
                   <button
                     className="joy-btn dpad-stop"
                     disabled={!isConnected}
@@ -928,7 +849,6 @@ function ControlPanelPage() {
               </div>
             </div>
           </div>
-
         </div>
       </div>
     </div>

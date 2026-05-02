@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import Base, engine
 from app.routers import auth, users, admin, robots, user_robot, cart, orders, reports
@@ -13,6 +13,13 @@ import asyncio
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Robot API")
+
+@app.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Aynı anda çok fazla işlem yapmaya çalıştınız. Lütfen 1 dakika bekleyip tekrar deneyin."}
+    )
 
 # Limiter
 app.state.limiter = limiter

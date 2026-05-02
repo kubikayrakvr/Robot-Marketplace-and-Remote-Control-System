@@ -129,13 +129,6 @@ function AdminRobotsPage() {
                       <Link to={`/admin/robots/duzenle/${robot.id}`} className="admin-btn edit">
                         ✏️ Düzenle
                       </Link>
-                      <button 
-                        onClick={() => handleDelete(robot.id, robot.name)}
-                        className="admin-btn delete"
-                        style={{ background: '#991b1b', color: '#fff', border: 'none', padding: '6px 12px', borderRadius: '6px', cursor: 'pointer', fontSize: '0.85rem' }}
-                      >
-                        🗑️ Sil
-                      </button>
                     </div>
                   </td>
                 </tr>

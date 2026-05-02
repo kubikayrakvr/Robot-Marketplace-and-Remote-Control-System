@@ -20,6 +20,7 @@ class RobotCatalog(Base):
     # Katalogdan üretilen tüm fiziksel envanterleri bulmamızı sağlar
     inventories = relationship("RobotInventory", back_populates="catalog")
 
+#şevval ekledi
 class RobotInventory(Base):
     """Kutudaki gerçek cihaz (Fiziksel envanter)"""
     __tablename__ = "robot_inventory"
@@ -30,10 +31,13 @@ class RobotInventory(Base):
     activation_code = Column(String, unique=True, index=True, nullable=False)
     is_activated = Column(Boolean, default=False, nullable=False)
 
-    catalog = relationship("RobotCatalog", back_populates="inventories")
-    # uselist=False çünkü her kutunun tek bir 'tapu' kaydı (UserRobot) olabilir
-    user_robot = relationship("UserRobot", back_populates="inventory", uselist=False)
+    # ROBOT HAREKET TAKİBİ İÇİN EKLENEN KOLONLAR
+    last_x = Column(Float, default=0.0)
+    last_y = Column(Float, default=0.0)
 
+    catalog = relationship("RobotCatalog", back_populates="inventories")
+    user_robot = relationship("UserRobot", back_populates="inventory", uselist=False)
+#şevval ekleme bitti
 class UserRobot(Base):
     """Kullanıcı Sahiplik (Aktivasyon sonrası eşleşme)"""
     __tablename__ = "user_robots"
