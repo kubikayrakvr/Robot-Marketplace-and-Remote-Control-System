@@ -73,40 +73,101 @@ def _load_robot_database() -> dict:
 
 
 # ── Spawn signal dispatch ──────────────────────────────────────────────────────
+#
+# A single persistent rosbridge connection is maintained for spawn dispatches.
+# Opening a fresh socket per claim turned out to be racy — rosbridge sometimes
+# processed the publish before the advertise was fully registered, dropping
+# the message silently. With a long-lived socket the advertise runs once at
+# startup and every subsequent claim is a single publish op on a known-good
+# topic. The connection self-heals on drop with backoff.
+
+_spawn_ws: Optional["websockets.WebSocketClientProtocol"] = None
+_spawn_ws_ready = asyncio.Event()
+_spawn_lock = asyncio.Lock()
+
+
+async def _spawn_dispatcher_loop() -> None:
+    """
+    Background task: keeps a rosbridge connection open for spawn publishes.
+    On disconnect, retries every 3 s. The advertise is sent once per
+    successful (re)connect so subsequent publishes are unambiguous.
+    """
+    global _spawn_ws
+    while True:
+        try:
+            async with websockets.connect(ROSBRIDGE_URL) as ws:
+                # Advertise the topic up front, in fully-qualified ROS 2 form.
+                # The short ROS 1 form ("std_msgs/String") is silently rejected
+                # by newer rosbridge_suite builds — that was the original
+                # failure mode where claims looked successful but no message
+                # ever reached the spawner.
+                await ws.send(json.dumps({
+                    "op": "advertise",
+                    "topic": SPAWN_SIGNAL_TOPIC,
+                    "type": "std_msgs/msg/String",
+                }))
+                # Give rosbridge a moment to register the advertisement.
+                await asyncio.sleep(0.3)
+                _spawn_ws = ws
+                _spawn_ws_ready.set()
+                print(f"[spawn] dispatcher connected, advertised {SPAWN_SIGNAL_TOPIC}")
+
+                # Drain rosbridge replies — it sends `op:status` frames for
+                # any errors. Logging them surfaces protocol-level rejections
+                # that would otherwise be invisible.
+                async for raw in ws:
+                    try:
+                        msg = json.loads(raw)
+                    except Exception:
+                        continue
+                    if msg.get("op") == "status":
+                        level = msg.get("level", "info")
+                        text  = msg.get("msg", "")
+                        if level in ("warning", "error"):
+                            print(f"[spawn] rosbridge {level}: {text}")
+
+        except Exception as e:
+            print(f"[spawn] dispatcher disconnected: {e!r} — yeniden deneniyor 3s")
+        finally:
+            _spawn_ws = None
+            _spawn_ws_ready.clear()
+            await asyncio.sleep(3)
+
 
 async def _publish_spawn_signal(
     namespace: str, x: float, y: float, robot_type: str
 ) -> None:
     """
-    One-shot publish to /spawn_signal_topic via a short-lived rosbridge socket.
-
-    The spawner node tracks an internal "already spawned" set, so re-claims
-    after disconnects produce duplicate signals that are safely ignored. We
-    bound the whole exchange with a 3 s timeout so a dead rosbridge never
-    blocks the claim response.
+    Publish a spawn directive on the long-lived dispatcher socket. Bounded
+    by a 3 s wait for the socket to come up — if the dispatcher is still
+    reconnecting we log and skip rather than blocking the claim response.
+    The spawner node deduplicates by namespace, so re-claims are harmless.
     """
     payload = f"{namespace},{x},{y},{robot_type}"
 
-    async def _send() -> None:
-        async with websockets.connect(ROSBRIDGE_URL) as ws:
-            await ws.send(json.dumps({
-                "op": "advertise",
-                "topic": SPAWN_SIGNAL_TOPIC,
-                "type": "std_msgs/String",
-            }))
+    try:
+        await asyncio.wait_for(_spawn_ws_ready.wait(), timeout=3.0)
+    except asyncio.TimeoutError:
+        print(f"[spawn] dispatcher not ready, skipped: {payload!r}")
+        return
+
+    ws = _spawn_ws
+    if ws is None:
+        print(f"[spawn] dispatcher socket vanished, skipped: {payload!r}")
+        return
+
+    # Serialise concurrent publishes — websockets.send is not safe to call
+    # from multiple coroutines on the same connection without a lock.
+    async with _spawn_lock:
+        try:
             await ws.send(json.dumps({
                 "op": "publish",
                 "topic": SPAWN_SIGNAL_TOPIC,
                 "msg": {"data": payload},
             }))
-            # Let rosbridge flush the publish before the socket closes.
-            await asyncio.sleep(0.1)
-
-    try:
-        await asyncio.wait_for(_send(), timeout=3.0)
-        print(f"[spawn] dispatched: {payload!r}")
-    except Exception as e:
-        print(f"[spawn] failed for {namespace!r}: {e}")
+            print(f"[spawn] dispatched: {payload!r}")
+        except Exception as e:
+            print(f"[spawn] publish failed for {namespace!r}: {e!r}")
 
 
 ROBOT_DATABASE: dict = {}
@@ -307,6 +368,10 @@ async def claim_robot(robot_id: str):
 
     print(f"[session] {clean_id!r} claim edildi — token [{token[:8]}…]")
 
+    # Backend-authoritative spawn dispatch: the frontend never sees the
+    # spawn topic, so a tampered client can't request a different SDF or
+    # an arbitrary spawn position. The spawner's internal `_spawned` set
+    # makes re-claims safe.
     info = ROBOT_DATABASE[clean_id]
     await _publish_spawn_signal(info["namespace"], info["x"], info["y"], info["type"])
 
@@ -417,6 +482,12 @@ async def ros_startup(loop: asyncio.AbstractEventLoop):
     _loop = loop
     ROBOT_DATABASE = _load_robot_database()
     asyncio.create_task(_reap_sessions())
+
+    # Persistent rosbridge connection for spawn dispatches. Started before
+    # subscribers so the advertise can complete during the time it takes
+    # the per-robot subscribers to connect.
+    asyncio.create_task(_spawn_dispatcher_loop())
+    print("[spawn] dispatcher görevi başlatıldı")
 
     # Her robot için rosbridge subscriber başlat
     for rid, info in ROBOT_DATABASE.items():
