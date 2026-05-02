@@ -693,53 +693,91 @@ function ControlPanelPage() {
       </div>
 
       <div className="control-grid">
-        {/* Top-left visual tile adapts to the robot's sensor loadout:
-              · Has camera → live MJPEG feed.
-              · No camera but has LIDAR → radar canvas promoted up
-                from the bottom row, larger size for readability.
-              · Neither → a clear "no visual sensor" placeholder so
-                the slot doesn't collapse and the grid stays balanced. */}
-        {hasCamera ? (
-          <div className="panel camera-panel">
-            <div className="panel-header">Ana Kamera (Gazebo)</div>
-            <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
-              {sessionToken ? (
-                <img
-                  src={getRosStreamUrl(rosRobotId, sessionToken)}
-                  alt="Robot Kamera Akışı"
-                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                  onError={(e) => {
-                    e.target.style.display = 'none';
-                    e.target.nextSibling.style.display = 'block';
-                  }}
-                />
-              ) : (
-                <div className="camera-loading">Video akışı bekleniyor...</div>
-              )}
-              <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
+        {/* Left column packs the visual sensor on top and the
+            IMU / small-radar row below. This keeps every readout in
+            one viewport — no scrolling — and absorbs the dead space
+            that used to sit below the Burger's promoted radar. */}
+        <div className="visual-col">
+          {/* Top-left visual tile adapts to the robot's sensor loadout:
+                · Has camera → live MJPEG feed.
+                · No camera but has LIDAR → radar canvas promoted up,
+                  larger size for readability.
+                · Neither → a clear "no visual sensor" placeholder so
+                  the slot doesn't collapse and the grid stays balanced. */}
+          {hasCamera ? (
+            <div className="panel camera-panel">
+              <div className="panel-header">Ana Kamera (Gazebo)</div>
+              <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+                {sessionToken ? (
+                  <img
+                    src={getRosStreamUrl(rosRobotId, sessionToken)}
+                    alt="Robot Kamera Akışı"
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                      e.target.nextSibling.style.display = 'block';
+                    }}
+                  />
+                ) : (
+                  <div className="camera-loading">Video akışı bekleniyor...</div>
+                )}
+                <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
+              </div>
             </div>
-          </div>
-        ) : hasScan ? (
-          <div className="panel radar-panel radar-panel-large">
-            <div className="panel-header">🎯 LIDAR Radar</div>
-            <div className="radar-wrapper">
-              <canvas ref={canvasRef} width={420} height={420} className="radar-canvas" />
-              <div className="radar-meta">
-                <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
-                <div className="radar-closest">
-                  En yakın: <span ref={radarClosestRef}>—</span>
+          ) : hasScan ? (
+            <div className="panel radar-panel radar-panel-large">
+              <div className="panel-header">🎯 LIDAR Radar</div>
+              <div className="radar-wrapper">
+                <canvas ref={canvasRef} width={360} height={360} className="radar-canvas" />
+                <div className="radar-meta">
+                  <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
+                  <div className="radar-closest">
+                    En yakın: <span ref={radarClosestRef}>—</span>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-        ) : (
-          <div className="panel camera-panel">
-            <div className="panel-header">Görsel Sensör</div>
-            <div className="cam-placeholder">
-              📷 Bu konfigürasyon kamera veya LIDAR ile donatılmamış.
+          ) : (
+            <div className="panel camera-panel">
+              <div className="panel-header">Görsel Sensör</div>
+              <div className="cam-placeholder">
+                📷 Bu konfigürasyon kamera veya LIDAR ile donatılmamış.
+              </div>
             </div>
+          )}
+
+          {/* IMU is always rendered. Small radar joins it side-by-side
+              when the camera occupied the top slot — when the radar was
+              already promoted up, the IMU spans the full row alone. */}
+          <div className={`sensor-row${hasCamera && hasScan ? '' : ' single'}`}>
+            <div className="panel imu-panel">
+              <div className="panel-header">📡 IMU</div>
+              <div className="sensor-rows">
+                <SensorRow label="Yaw hızı"   value={(imu.gz * RAD_TO_DEG).toFixed(1)} unit="°/s" />
+                <SensorRow label="Pitch hızı" value={(imu.gy * RAD_TO_DEG).toFixed(1)} unit="°/s" />
+                <SensorRow label="Roll hızı"  value={(imu.gx * RAD_TO_DEG).toFixed(1)} unit="°/s" />
+                <SensorRow label="İvme X"     value={imu.ax.toFixed(2)}                unit="m/s²" />
+                <SensorRow label="İvme Y"     value={imu.ay.toFixed(2)}                unit="m/s²" />
+                <SensorRow label="İvme Z"     value={imu.az.toFixed(2)}                unit="m/s²" />
+              </div>
+            </div>
+
+            {hasCamera && hasScan && (
+              <div className="panel radar-panel">
+                <div className="panel-header">🎯 LIDAR Radar</div>
+                <div className="radar-wrapper">
+                  <canvas ref={canvasRef} width={200} height={200} className="radar-canvas" />
+                  <div className="radar-meta">
+                    <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
+                    <div className="radar-closest">
+                      En yakın: <span ref={radarClosestRef}>—</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        )}
+        </div>
 
         <div className="panel side-panel">
           <div className="panel-section">
@@ -892,39 +930,6 @@ function ControlPanelPage() {
           </div>
 
         </div>
-      </div>
-
-      {/* When the camera occupies the top-left tile, the radar lives in
-          the bottom row beside the IMU. When the radar is already promoted
-          above (no-camera fleet), the bottom row collapses to a single
-          IMU column so we don't render the canvas twice or leave a gap. */}
-      <div className={`bottom-grid${(!hasCamera || !hasScan) ? ' single-col' : ''}`}>
-        <div className="panel imu-panel">
-          <div className="panel-header">📡 IMU</div>
-          <div className="sensor-rows">
-            <SensorRow label="Yaw hızı"   value={(imu.gz * RAD_TO_DEG).toFixed(1)} unit="°/s" />
-            <SensorRow label="Pitch hızı" value={(imu.gy * RAD_TO_DEG).toFixed(1)} unit="°/s" />
-            <SensorRow label="Roll hızı"  value={(imu.gx * RAD_TO_DEG).toFixed(1)} unit="°/s" />
-            <SensorRow label="İvme X"     value={imu.ax.toFixed(2)}                unit="m/s²" />
-            <SensorRow label="İvme Y"     value={imu.ay.toFixed(2)}                unit="m/s²" />
-            <SensorRow label="İvme Z"     value={imu.az.toFixed(2)}                unit="m/s²" />
-          </div>
-        </div>
-
-        {hasCamera && hasScan && (
-          <div className="panel radar-panel">
-            <div className="panel-header">🎯 LIDAR Radar</div>
-            <div className="radar-wrapper">
-              <canvas ref={canvasRef} width={240} height={240} className="radar-canvas" />
-              <div className="radar-meta">
-                <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
-                <div className="radar-closest">
-                  En yakın: <span ref={radarClosestRef}>—</span>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
