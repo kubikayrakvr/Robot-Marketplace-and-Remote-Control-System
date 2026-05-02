@@ -119,18 +119,41 @@ function ControlSelectionPage() {
                     ? '🟢 Çevrimiçi'
                     : '🟡 Çevrimdışı (başlatılabilir)';
 
+                // Sensor chips give the user an at-a-glance summary of
+                // what each robot can do, before they click into the
+                // control panel. Backend supplies the array; we map to
+                // emoji + Turkish label for the visible tag.
+                const sensorChips = [
+                  { key: 'camera', icon: '📷', label: 'Kamera' },
+                  { key: 'scan',   icon: '🎯', label: 'LIDAR' },
+                  { key: 'imu',    icon: '🧭', label: 'IMU' },
+                ];
+
                 return (
-                  <div key={robot.instanceId} className="robot-card" style={{ padding: '1rem', border: '1px solid #ccc', borderRadius: '8px', marginBottom: '1rem' }}>
+                  <div key={robot.instanceId} className="panel robot-card">
                     <div className="card-info">
                       <div className="robot-icon">{robot.icon || '🤖'}</div>
                       <div className="robot-details">
                         <h3>{robot.nickname || robot.name}</h3>
-                        <p>ROS ID: {robot.rosRobotId}</p>
-                        <p>Durum: {statusText}</p>
-                        {isClaimed && <p style={{color: 'orange'}}>Kullanımda</p>}
+                        <p className="robot-meta">ROS ID: <span className="ns-tag-inline">{robot.rosRobotId}</span></p>
+                        <p className="robot-meta">{statusText}</p>
+                        {isClaimed && <p className="robot-busy">Kullanımda</p>}
+                        {registered && (
+                          <div className="sensor-chips">
+                            {sensorChips.map(c => (
+                              <span
+                                key={c.key}
+                                className={`sensor-chip ${(rosInfo.sensors || []).includes(c.key) ? 'have' : 'lack'}`}
+                                title={(rosInfo.sensors || []).includes(c.key) ? `${c.label} mevcut` : `${c.label} yok`}
+                              >
+                                {c.icon} {c.label}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
-                    <div className="card-actions" style={{ marginTop: '1rem' }}>
+                    <div className="card-actions">
                       <button
                         className="primary-button"
                         onClick={() => navigate(`/user/kontrol/${robot.instanceId}`)}

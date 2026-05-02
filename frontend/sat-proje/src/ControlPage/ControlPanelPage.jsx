@@ -10,6 +10,7 @@ import {
   sendBeaconRelease,
   getRosStreamUrl,
   getRosWebSocketUrl,
+  fetchRosRobotById,
 } from '../api/rosApi';
 
 const ROSBRIDGE_URL = 'ws://49.13.13.48:9090';
@@ -34,6 +35,12 @@ function ControlPanelPage() {
   const [sessionToken, setSessionToken] = useState(null);
   const [status, setStatus] = useState('Bağlanıyor...');
   const [error, setError] = useState(null);
+  // Sensor configuration of the connected robot. Until the detail fetch
+  // completes we render the layout with all three sensors assumed present
+  // (the most common Waffle case) — once the response lands the flag flips
+  // and the layout adapts. Concrete values come from the backend
+  // /ros/robot/{id} response, which is sourced from _TYPE_SENSORS.
+  const [sensors, setSensors] = useState(null);
   // Starts `true` so the drive controls are disabled until the first odom
   // arrives. This gates teleop on the spawn-then-online lifecycle: claim
   // succeeds → spawn signal fires → robot enters ROS → odom flows → drive
@@ -326,7 +333,14 @@ function ControlPanelPage() {
 
     async function connect() {
       try {
-        const { token } = await claimRosRobot(rosRobotId);
+        // Parallel: claim the session + fetch sensor metadata. The detail
+        // call adds nothing critical to the claim path so it goes alongside,
+        // not before — the claim response is what blocks teleop start.
+        const [{ token }, detail] = await Promise.all([
+          claimRosRobot(rosRobotId),
+          fetchRosRobotById(rosRobotId).catch(() => null),
+        ]);
+
         if (!isMounted) {
           releaseRosRobot(rosRobotId, token).catch(() => {});
           return;
@@ -334,6 +348,9 @@ function ControlPanelPage() {
         currentToken = token;
         tokenRef.current = token;
         setSessionToken(token);
+        if (detail && Array.isArray(detail.sensors)) {
+          setSensors(detail.sensors);
+        }
 
         // Session-keepalive ping to FastAPI (claim TTL).
         //
@@ -581,6 +598,13 @@ function ControlPanelPage() {
     };
   }, [rosRobotId, drawRadar, emergencyStop]);
 
+  // Sensor capabilities. While `sensors` is still null (detail fetch
+  // pending), assume the most-equipped configuration so the layout
+  // doesn't flash a smaller variant before the first paint.
+  const sensorList = sensors ?? ['imu', 'scan', 'camera'];
+  const hasCamera  = sensorList.includes('camera');
+  const hasScan    = sensorList.includes('scan');
+
   // Single source of truth for the error screen. The missing-rosRobotId case
   // is derived (no setState) so the connect effect stays render-pure.
   const displayError = error
@@ -669,25 +693,53 @@ function ControlPanelPage() {
       </div>
 
       <div className="control-grid">
-        <div className="panel camera-panel">
-          <div className="panel-header">Ana Kamera (Gazebo)</div>
-          <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
-            {sessionToken ? (
-              <img
-                src={getRosStreamUrl(rosRobotId, sessionToken)}
-                alt="Robot Kamera Akışı"
-                style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                onError={(e) => {
-                  e.target.style.display = 'none';
-                  e.target.nextSibling.style.display = 'block';
-                }}
-              />
-            ) : (
-              <div className="camera-loading">Video akışı bekleniyor...</div>
-            )}
-            <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
+        {/* Top-left visual tile adapts to the robot's sensor loadout:
+              · Has camera → live MJPEG feed.
+              · No camera but has LIDAR → radar canvas promoted up
+                from the bottom row, larger size for readability.
+              · Neither → a clear "no visual sensor" placeholder so
+                the slot doesn't collapse and the grid stays balanced. */}
+        {hasCamera ? (
+          <div className="panel camera-panel">
+            <div className="panel-header">Ana Kamera (Gazebo)</div>
+            <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+              {sessionToken ? (
+                <img
+                  src={getRosStreamUrl(rosRobotId, sessionToken)}
+                  alt="Robot Kamera Akışı"
+                  style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  onError={(e) => {
+                    e.target.style.display = 'none';
+                    e.target.nextSibling.style.display = 'block';
+                  }}
+                />
+              ) : (
+                <div className="camera-loading">Video akışı bekleniyor...</div>
+              )}
+              <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
+            </div>
           </div>
-        </div>
+        ) : hasScan ? (
+          <div className="panel radar-panel radar-panel-large">
+            <div className="panel-header">🎯 LIDAR Radar</div>
+            <div className="radar-wrapper">
+              <canvas ref={canvasRef} width={420} height={420} className="radar-canvas" />
+              <div className="radar-meta">
+                <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
+                <div className="radar-closest">
+                  En yakın: <span ref={radarClosestRef}>—</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="panel camera-panel">
+            <div className="panel-header">Görsel Sensör</div>
+            <div className="cam-placeholder">
+              📷 Bu konfigürasyon kamera veya LIDAR ile donatılmamış.
+            </div>
+          </div>
+        )}
 
         <div className="panel side-panel">
           <div className="panel-section">
@@ -792,7 +844,19 @@ function ControlPanelPage() {
                     onTouchStart={(e) => { e.preventDefault(); dpadStart(0, angSpeed); }}
                     onTouchEnd={dpadStop}
                   >◀</button>
-                  <div className="joy-center"></div>
+                  {/* E-stop lives in the dpad's center cell — closer to
+                      the user's hand position than a separate row at the
+                      bottom of the panel. Always usable when connected,
+                      even mid-stall, so the operator can stop a runaway
+                      robot the moment they notice. */}
+                  <button
+                    className="joy-btn dpad-stop"
+                    disabled={!isConnected}
+                    onMouseDown={emergencyStop}
+                    onTouchStart={(e) => { e.preventDefault(); emergencyStop(); }}
+                    aria-label="Acil Durdurma"
+                    title="Acil Durdurma (Boşluk)"
+                  >■</button>
                   <button
                     className="joy-btn joy-right"
                     disabled={!canDrive}
@@ -827,19 +891,14 @@ function ControlPanelPage() {
             </div>
           </div>
 
-          <div className="panel-section action-section">
-            <button
-              className="danger-button full-width"
-              disabled={!isConnected}
-              onClick={emergencyStop}
-            >
-              ACİL DURDURMA (E-STOP)
-            </button>
-          </div>
         </div>
       </div>
 
-      <div className="bottom-grid">
+      {/* When the camera occupies the top-left tile, the radar lives in
+          the bottom row beside the IMU. When the radar is already promoted
+          above (no-camera fleet), the bottom row collapses to a single
+          IMU column so we don't render the canvas twice or leave a gap. */}
+      <div className={`bottom-grid${(!hasCamera || !hasScan) ? ' single-col' : ''}`}>
         <div className="panel imu-panel">
           <div className="panel-header">📡 IMU</div>
           <div className="sensor-rows">
@@ -852,18 +911,20 @@ function ControlPanelPage() {
           </div>
         </div>
 
-        <div className="panel radar-panel">
-          <div className="panel-header">🎯 LIDAR Radar</div>
-          <div className="radar-wrapper">
-            <canvas ref={canvasRef} width={240} height={240} className="radar-canvas" />
-            <div className="radar-meta">
-              <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
-              <div className="radar-closest">
-                En yakın: <span ref={radarClosestRef}>—</span>
+        {hasCamera && hasScan && (
+          <div className="panel radar-panel">
+            <div className="panel-header">🎯 LIDAR Radar</div>
+            <div className="radar-wrapper">
+              <canvas ref={canvasRef} width={240} height={240} className="radar-canvas" />
+              <div className="radar-meta">
+                <div className="radar-legend" ref={radarLegendRef}>Tarama bekleniyor…</div>
+                <div className="radar-closest">
+                  En yakın: <span ref={radarClosestRef}>—</span>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
     </div>
   );

@@ -938,6 +938,31 @@ button {
   gap: 24px;
 }
 
+/* When the radar gets promoted into the top-left tile (no-camera
+   fleet) the bottom grid is left with just the IMU panel; let it
+   span full width instead of orphaning a half. */
+.bottom-grid.single-col {
+  grid-template-columns: 1fr;
+}
+
+/* Radar promoted to fill the camera slot. Larger canvas, more padding,
+   readable from across the room. */
+.radar-panel-large .radar-wrapper {
+  padding: 24px 16px 28px;
+  gap: 14px;
+}
+.radar-panel-large .radar-canvas {
+  width: 420px;
+  height: 420px;
+  max-width: 100%;
+}
+.radar-panel-large .radar-legend {
+  font-size: 0.9rem;
+}
+.radar-panel-large .radar-closest {
+  font-size: 1rem;
+}
+
 /* ── IMU sensor rows ─────────────────────────────────────────── */
 .sensor-rows {
   padding: 14px 20px 18px;
@@ -967,6 +992,97 @@ button {
   font-weight: 700;
   color: #38bdf8;
   font-size: 0.95rem;
+}
+
+/* ── Selection cards: sensor capability chips ─────────────────── */
+.robot-card {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+  gap: 16px;
+}
+
+.robot-card .card-info {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.robot-card .robot-icon {
+  font-size: 2.2rem;
+  line-height: 1;
+}
+
+.robot-card .robot-details {
+  flex: 1;
+  min-width: 0;
+}
+
+.robot-card .robot-details h3 {
+  margin: 0 0 6px 0;
+  font-size: 1.05rem;
+  color: #f8fafc;
+}
+
+.robot-card .robot-meta {
+  margin: 2px 0;
+  font-size: 0.85rem;
+  color: #94a3b8;
+}
+
+.robot-card .ns-tag-inline {
+  font-family: monospace;
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.08);
+  padding: 1px 8px;
+  border-radius: 6px;
+  font-size: 0.82rem;
+}
+
+.robot-card .robot-busy {
+  margin: 4px 0 0;
+  color: #fbbf24;
+  font-weight: 600;
+  font-size: 0.85rem;
+}
+
+.robot-card .card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.sensor-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.sensor-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.sensor-chip.have {
+  background: rgba(74, 222, 128, 0.12);
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.3);
+}
+
+.sensor-chip.lack {
+  background: rgba(148, 163, 184, 0.06);
+  color: #64748b;
+  border-color: rgba(148, 163, 184, 0.15);
+  text-decoration: line-through;
+  text-decoration-color: rgba(100, 116, 139, 0.5);
 }
 
 /* ── LIDAR radar panel ───────────────────────────────────────── */
@@ -1323,13 +1439,42 @@ button {
 .joy-right { grid-column: 3; grid-row: 2; }
 .joy-down { grid-column: 2; grid-row: 3; }
 
-.joy-center {
+/* E-stop replaces the decorative center cell. Red gradient + slight
+   inner glow makes it the focal point of the dpad — the user can find
+   it without taking their eyes off the radar / camera. */
+.dpad-stop {
   grid-column: 2;
   grid-row: 2;
-  background: radial-gradient(circle, #334155, #0f172a);
-  border-radius: 50%;
-  border: 2px solid rgba(148, 163, 184, 0.1);
-  margin: 10px;
+  background: linear-gradient(145deg, #ef4444, #b91c1c);
+  border: 2px solid rgba(239, 68, 68, 0.6);
+  border-radius: 12px;
+  color: white;
+  font-weight: 700;
+  font-size: 1.1rem;
+  cursor: pointer;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.4),
+              inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  transition: transform 0.08s, box-shadow 0.08s;
+}
+.dpad-stop:hover:not(:disabled) {
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.7),
+              inset 0 1px 0 rgba(255, 255, 255, 0.2);
+}
+.dpad-stop:active:not(:disabled) {
+  transform: scale(0.94);
+  background: linear-gradient(145deg, #b91c1c, #7f1d1d);
+}
+.dpad-stop:disabled {
+  background: #334155;
+  border-color: rgba(148, 163, 184, 0.2);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.joystick-container.compact .dpad-stop {
+  font-size: 0.95rem;
+  border-radius: 8px;
 }
 
 .action-section {
