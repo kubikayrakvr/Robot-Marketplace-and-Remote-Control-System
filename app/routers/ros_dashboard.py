@@ -23,9 +23,21 @@ _active_ws: dict[str, WebSocket] = {}
 _claim_lock = asyncio.Lock()
 _loop = None
 
+# robot_id → unix timestamp of last telemetry frame forwarded by the relay.
+# This is the authoritative "is this robot alive in ROS right now?" signal —
+# topic discovery via rosapi/topics is unreliable for namespaced topics on
+# rosbridge, so we just observe what's actually flowing.
+_last_seen: dict[str, float] = {}
+ONLINE_THRESHOLD_S = 5.0    # any telemetry within this window → online
+
 SESSION_TIMEOUT_S = 15.0
 ROSBRIDGE_URL = "ws://host.docker.internal:9090"
 SPAWN_SIGNAL_TOPIC = "/spawn_signal_topic"
+
+
+def _is_online(robot_id: str) -> bool:
+    last = _last_seen.get(robot_id)
+    return last is not None and (time.time() - last) < ONLINE_THRESHOLD_S
 
 # Physical fleet profile, keyed by ros_namespace. RobotCatalog.type stores
 # Turkish display labels for the shop UI, so it cannot double as the spawner
@@ -315,6 +327,13 @@ async def _rosbridge_subscribe(robot_id: str, namespace: str):
                     if payload is None:
                         continue
 
+                    # Mark this robot as alive. We update on *every* forwarded
+                    # frame (not just odom) so a robot publishing only e.g.
+                    # collision_status still registers as online — and we
+                    # update before the "no active operator" early-out so the
+                    # online state reflects ROS health, not session state.
+                    _last_seen[robot_id] = time.time()
+
                     client_ws = _active_ws.get(robot_id)
                     if client_ws is None:
                         # Nobody listening — drop on the floor (cheap).
@@ -334,7 +353,12 @@ async def _rosbridge_subscribe(robot_id: str, namespace: str):
 @router.get("/robots")
 async def list_robots():
     return [
-        {**info, "id": rid, "session_active": _sessions.get(rid) is not None}
+        {
+            **info,
+            "id":             rid,
+            "session_active": _sessions.get(rid) is not None,
+            "online":         _is_online(rid),
+        }
         for rid, info in ROBOT_DATABASE.items()
     ]
 
@@ -345,8 +369,12 @@ async def get_robot(robot_id: str):
     if clean_id not in ROBOT_DATABASE:
         raise HTTPException(status_code=404, detail="Robot bulunamadı")
     robot = ROBOT_DATABASE[clean_id]
-    session = _sessions.get(clean_id)
-    return {**robot, "id": clean_id, "session_active": session is not None}
+    return {
+        **robot,
+        "id":             clean_id,
+        "session_active": _sessions.get(clean_id) is not None,
+        "online":         _is_online(clean_id),
+    }
 
 
 @router.post("/robot/{robot_id}/claim")

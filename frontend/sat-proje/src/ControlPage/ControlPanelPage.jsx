@@ -34,7 +34,16 @@ function ControlPanelPage() {
   const [sessionToken, setSessionToken] = useState(null);
   const [status, setStatus] = useState('Bağlanıyor...');
   const [error, setError] = useState(null);
-  const [isStale, setIsStale] = useState(false);
+  // Starts `true` so the drive controls are disabled until the first odom
+  // arrives. This gates teleop on the spawn-then-online lifecycle: claim
+  // succeeds → spawn signal fires → robot enters ROS → odom flows → drive
+  // enables. The watchdog flips this back to true if telemetry stalls.
+  const [isStale, setIsStale] = useState(true);
+  // Sticky flag — false until the first odom arrives, true forever after.
+  // Used to disambiguate "still spawning" from "lost mid-session" in the
+  // status pill. Kept as state (not a ref) because React 19 rejects ref
+  // reads during render.
+  const [hasEverReceivedTelemetry, setHasEverReceivedTelemetry] = useState(false);
   // Starts `true` so we render the odom fallback before any pose has arrived.
   // Flips to false on the first pose, back to true when the watchdog tick
   // notices it's been longer than POSE_STALE_MS since the last update.
@@ -485,6 +494,12 @@ function ControlPanelPage() {
             case 'odom':
               setOdom({ x: d.x, y: d.y, ts: Date.now() });
               lastOdomTsRef.current = Date.now();
+              // First odom after spawn — flip the stale guard immediately so
+              // drive controls light up without waiting for the next 1 Hz
+              // watchdog tick. Both updates bail out cheaply once they're
+              // already at their target value.
+              setIsStale(prev => (prev ? false : prev));
+              setHasEverReceivedTelemetry(prev => prev || true);
               break;
             case 'pose':
               setPose({ wx: d.wx, wy: d.wy, heading: d.heading, ts: Date.now() });
@@ -596,9 +611,15 @@ function ControlPanelPage() {
   // the user out entirely.
   const canDrive = isConnected && !isStale;
 
-  const displayStatus = isStale ? 'Hedef Kayıp' : status;
-  const statusDotColor = isStale ? '#ef4444' : (isConnected ? '#4ade80' : '#f59e0b');
-  const statusPillClass = isStale ? 'disconnected' : (isConnected ? 'connected' : 'connecting');
+  const displayStatus = isStale
+    ? (hasEverReceivedTelemetry ? 'Hedef Kayıp' : 'Robot başlatılıyor…')
+    : status;
+  const statusDotColor = isStale
+    ? (hasEverReceivedTelemetry ? '#ef4444' : '#f59e0b')
+    : (isConnected ? '#4ade80' : '#f59e0b');
+  const statusPillClass = isStale
+    ? (hasEverReceivedTelemetry ? 'disconnected' : 'connecting')
+    : (isConnected ? 'connected' : 'connecting');
 
   // Ground-truth-or-fallback: prefer wx/wy when pose is fresh, else odom.
   // `isPoseStale` is maintained by the watchdog tick — keeping the read

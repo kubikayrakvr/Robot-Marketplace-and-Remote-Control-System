@@ -11,17 +11,25 @@ function ControlSelectionPage() {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let cancelled = false;
+
     async function loadRobots() {
       try {
         const data = await fetchRosRobots();
-        setRosRobots(data);
+        if (!cancelled) setRosRobots(data);
       } catch (err) {
-        setError(err.message || 'ROS sunucusuna bağlanılamadı.');
+        if (!cancelled) setError(err.message || 'ROS sunucusuna bağlanılamadı.');
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
+
     loadRobots();
+    // Poll the fleet status every 3 s while the page is open so the online /
+    // busy badges reflect the current simulator state. The endpoint is cheap —
+    // it reads from in-memory dicts on the backend.
+    const id = setInterval(loadRobots, 3000);
+    return () => { cancelled = true; clearInterval(id); };
   }, []);
 
   // Filter owned robots that have a valid rosRobotId
@@ -78,9 +86,38 @@ function ControlSelectionPage() {
           ) : (
             <div className="robot-grid">
               {controllableRobots.map(robot => {
-                const rosInfo = rosRobots.find(rr => rr.id === robot.rosRobotId);
-                const isOnline = !!rosInfo;
-                const isClaimed = isOnline && rosInfo.session_active;
+                // `rosInfo` is the fleet record from /ros/robots — present
+                // when the robot's namespace is registered server-side.
+                // `online` is the new live signal: true if any telemetry
+                // has been observed within ONLINE_THRESHOLD_S.
+                const rosInfo    = rosRobots.find(rr => rr.id === robot.rosRobotId);
+                const registered = !!rosInfo;
+                const isOnline   = registered && rosInfo.online;
+                const isClaimed  = registered && rosInfo.session_active;
+
+                // Three button states the user can act on:
+                //   - registered & not online → "Başlat" (clicking claims,
+                //     which fires the spawn signal; once telemetry flows the
+                //     control panel flips out of its starting-up state).
+                //   - online & free → "Bağlan".
+                //   - online & busy → disabled.
+                let buttonLabel = 'Bağlan';
+                let buttonDisabled = false;
+                if (!registered) {
+                  buttonLabel = 'Bağlantı Yok';
+                  buttonDisabled = true;
+                } else if (isClaimed) {
+                  buttonLabel = 'Meşgul';
+                  buttonDisabled = true;
+                } else if (!isOnline) {
+                  buttonLabel = 'Başlat';
+                }
+
+                const statusText = !registered
+                  ? '⚪ Sistemde Tanımsız'
+                  : isOnline
+                    ? '🟢 Çevrimiçi'
+                    : '🟡 Çevrimdışı (başlatılabilir)';
 
                 return (
                   <div key={robot.instanceId} className="robot-card" style={{ padding: '1rem', border: '1px solid #ccc', borderRadius: '8px', marginBottom: '1rem' }}>
@@ -89,7 +126,7 @@ function ControlSelectionPage() {
                       <div className="robot-details">
                         <h3>{robot.nickname || robot.name}</h3>
                         <p>ROS ID: {robot.rosRobotId}</p>
-                        <p>Durum: {isOnline ? '🟢 Çevrimiçi' : '🔴 Çevrimdışı'}</p>
+                        <p>Durum: {statusText}</p>
                         {isClaimed && <p style={{color: 'orange'}}>Kullanımda</p>}
                       </div>
                     </div>
@@ -97,9 +134,9 @@ function ControlSelectionPage() {
                       <button
                         className="primary-button"
                         onClick={() => navigate(`/user/kontrol/${robot.instanceId}`)}
-                        disabled={!isOnline || isClaimed}
+                        disabled={buttonDisabled}
                       >
-                        {!isOnline ? 'Bağlantı Yok' : isClaimed ? 'Meşgul' : 'Bağlan'}
+                        {buttonLabel}
                       </button>
                     </div>
                   </div>
