@@ -41,7 +41,9 @@ export function claimRosRobot(robotId) {
   return authFetch(`/ros/robot/${robotId}/claim`, { method: 'POST' });
 }
 
-/** Claim edilmiş robota kalp atışı (heartbeat) gönderir */
+/** Claim edilmiş robota kalp atışı (heartbeat) gönderir.
+ *  Errors carry a numeric `.status` so callers can distinguish a transient
+ *  network failure (no status) from a hard rejection by the server (403/404). */
 export function heartbeatRosRobot(robotId, sessionToken) {
   const token = getAccessToken();
   return fetch(`${API_URL}/ros/robot/${robotId}/heartbeat`, {
@@ -54,7 +56,9 @@ export function heartbeatRosRobot(robotId, sessionToken) {
   }).then(async (res) => {
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw new Error(body.detail || `İstek başarısız (HTTP ${res.status})`);
+      const err = new Error(body.detail || `İstek başarısız (HTTP ${res.status})`);
+      err.status = res.status;
+      throw err;
     }
     return res.json();
   });
@@ -108,4 +112,17 @@ export function getRosWebSocketUrl(robotId, sessionToken) {
 /** Video stream URL'sini döner */
 export function getRosStreamUrl(robotId, sessionToken) {
   return `${API_URL}/ros/robot/${robotId}/stream?token=${sessionToken}`;
+}
+
+/** Fire-and-forget session release for the `beforeunload` path.
+ *
+ * Regular fetch() can be cancelled when the page unloads, so we use
+ * navigator.sendBeacon — which is queued by the browser and guaranteed to
+ * dispatch even after the document is gone. The release endpoint accepts
+ * the session token as a query parameter (no Authorization header needed,
+ * since sendBeacon can't set custom headers anyway). */
+export function sendBeaconRelease(robotId, sessionToken) {
+  if (!navigator.sendBeacon) return false;
+  const url = `${API_URL}/ros/robot/${robotId}/release?token=${encodeURIComponent(sessionToken)}`;
+  return navigator.sendBeacon(url);
 }

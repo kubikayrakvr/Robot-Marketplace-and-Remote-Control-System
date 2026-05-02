@@ -1,4 +1,10 @@
 from app.database import SessionLocal
+# Importing every model module up front populates SQLAlchemy's class registry
+# so the string references inside relationship() (e.g. "User", "CartItem")
+# can be resolved when the first query triggers mapper configuration. The
+# FastAPI app gets these for free via the router imports; this standalone
+# script doesn't, so we pull them in explicitly.
+from app.models import user, robot, shop, audit  # noqa: F401
 from app.models.robot import RobotCatalog
 
 def init_catalog():
