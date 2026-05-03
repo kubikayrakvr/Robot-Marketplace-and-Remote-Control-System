@@ -45,10 +45,11 @@ function ControlPanelPage() {
 
   // Camera retry key — incrementing this forces the <img> to remount and retry
   const [cameraKey, setCameraKey] = useState(0);
-  // cameraError: true while the stream is down and we are waiting to retry.
-  // We show a translucent overlay instead of blank alt-text so the box never
-  // collapses and the user always has visual feedback.
-  const [cameraError, setCameraError] = useState(false);
+  // cameraLive: true once the first MJPEG frame has been decoded (onLoad fired).
+  // Stays false while connecting or between retries so the overlay is always visible.
+  const [cameraLive, setCameraLive] = useState(false);
+  // Holds the active "no-frame" timeout so we can cancel it cleanly.
+  const cameraTimerRef = useRef(null);
 
   // ── Telemetry state (relay-driven) ───────────────────────────────────
   const [odom, setOdom] = useState({ x: 0, y: 0, ts: 0 });
@@ -101,6 +102,21 @@ function ControlPanelPage() {
 
   useEffect(() => { linSpeedRef.current = linSpeed; }, [linSpeed]);
   useEffect(() => { angSpeedRef.current = angSpeed; }, [angSpeed]);
+
+  // ── Camera: no-frame watchdog ────────────────────────────────────────────
+  // MJPEG streams never fire onError when connected but delivering no frames
+  // (the browser gets HTTP 200 with the right content-type and just waits).
+  // So we start a 6-second countdown on every new <img> mount; if onLoad
+  // (first frame decoded) hasn't fired by then, bump the key to reconnect.
+  // onLoad cancels the timer and marks the stream live. onError also cancels
+  // and schedules a 3-second retry for genuine HTTP failures.
+  useEffect(() => {
+    if (!sessionToken) return;
+    setCameraLive(false);
+    clearTimeout(cameraTimerRef.current);
+    cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 6000);
+    return () => clearTimeout(cameraTimerRef.current);
+  }, [cameraKey, sessionToken]);
 
   // ── Drive command helpers ────────────────────────────────────────────
   const setDesiredVel = useCallback((linear, angular) => {
@@ -680,9 +696,9 @@ function ControlPanelPage() {
             <div className="panel camera-panel">
               <div className="panel-header">Ana Kamera</div>
               {/*
-                The feed container is locked to 16:9 so the box never resizes
-                when the stream drops — width: 100% fills the panel, and
-                aspectRatio drives the height deterministically.
+                Fixed 16:9 container — the box never resizes while the stream is
+                reconnecting because width:100% + aspectRatio drives the height
+                independently of the <img> content.
               */}
               <div
                 className="camera-feed"
@@ -693,23 +709,19 @@ function ControlPanelPage() {
                   width: '100%',
                   aspectRatio: '16 / 9',
                   background: '#000',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
                   flexShrink: 0,
                 }}
               >
                 {sessionToken ? (
                   <>
                     {/*
-                      key remounts the element to force the browser to open a
-                      fresh HTTP connection to the MJPEG endpoint.
-                      alt="" — empty so no text renders during a retry gap.
-                      onLoad clears the error overlay as soon as pixels arrive.
-                      onError waits 3 s then retries; during that window the
-                      semi-transparent overlay below gives feedback without
-                      removing the last good frame from view (the browser keeps
-                      the previous img painted until the new element replaces it).
+                      alt="" — empty so no alt-text renders during the retry gap.
+                      onLoad fires when the first MJPEG frame is decoded; clears
+                        the countdown timer and marks the stream live.
+                      onError fires on genuine HTTP failures (4xx/5xx/network);
+                        schedules a 3 s retry.
+                      The 6-second countdown in the useEffect above handles the
+                        "stream open but no frames yet" case that onError misses.
                     */}
                     <img
                       key={cameraKey}
@@ -721,36 +733,53 @@ function ControlPanelPage() {
                         objectFit: 'contain',
                         display: 'block',
                       }}
-                      onLoad={() => setCameraError(false)}
+                      onLoad={() => {
+                        clearTimeout(cameraTimerRef.current);
+                        setCameraLive(true);
+                      }}
                       onError={() => {
-                        setCameraError(true);
-                        setTimeout(() => {
-                          setCameraKey(k => k + 1);
-                          // Error overlay stays until onLoad fires on the new img
-                        }, 3000);
+                        clearTimeout(cameraTimerRef.current);
+                        setCameraLive(false);
+                        cameraTimerRef.current = setTimeout(
+                          () => setCameraKey(k => k + 1),
+                          3000,
+                        );
                       }}
                     />
-                    {cameraError && (
-                      <div style={{
-                        position: 'absolute',
-                        inset: 0,
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem',
-                        background: 'rgba(0, 0, 0, 0.65)',
-                        color: '#94a3b8',
-                        fontSize: '0.85rem',
-                        pointerEvents: 'none',
-                      }}>
+                    {/* Overlay visible until the first frame arrives */}
+                    {!cameraLive && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          inset: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          background: 'rgba(0, 0, 0, 0.7)',
+                          color: '#94a3b8',
+                          fontSize: '0.85rem',
+                          pointerEvents: 'none',
+                        }}
+                      >
                         <span style={{ fontSize: '1.5rem' }}>🔄</span>
-                        Kamera yeniden bağlanıyor…
+                        Kamera bağlanıyor…
                       </div>
                     )}
                   </>
                 ) : (
-                  <div className="camera-loading" style={{ color: '#64748b' }}>
+                  <div
+                    className="camera-loading"
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#64748b',
+                    }}
+                  >
                     Video akışı bekleniyor...
                   </div>
                 )}
