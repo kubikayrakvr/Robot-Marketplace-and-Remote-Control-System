@@ -28,14 +28,12 @@ ROBOT_DETAIL_PROFILES = {
             {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Full 360° LIDAR package for robust navigation in dynamic environments."},
         ],
         "gallery": [
-            "/robots/waffle_gallery/01.svg",
-            "/robots/waffle_gallery/02.svg",
-            "/robots/waffle_gallery/03.svg",
+            "/robots/waffle_gallery/1.png",
+            "/robots/waffle_gallery/2.png",
+            "/robots/waffle_gallery/3.png",
         ],
         "blueprints": [
-            {"label": "Top View", "image": "/robots/blueprints/top.svg"},
-            {"label": "Side View", "image": "/robots/blueprints/side.svg"},
-            {"label": "Front View", "image": "/robots/blueprints/front.svg"},
+            {"label": "Waffle Blueprint", "image": "/robots/blueprints/wafflerobot.png"},
         ],
     },
     "rob200": {
@@ -60,14 +58,12 @@ ROBOT_DETAIL_PROFILES = {
             {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Enhanced scanning package for dense mapping and slow-speed obstacle detection."},
         ],
         "gallery": [
-            "/robots/burger_gallery/01.svg",
-            "/robots/burger_gallery/02.svg",
-            "/robots/burger_gallery/03.svg",
+            "/robots/burger_gallery/1.png",
+            "/robots/burger_gallery/2.png",
+            "/robots/burger_gallery/3.png",
         ],
         "blueprints": [
-            {"label": "Top View", "image": "/robots/blueprints/top.svg"},
-            {"label": "Side View", "image": "/robots/blueprints/side.svg"},
-            {"label": "Front View", "image": "/robots/blueprints/front.svg"},
+            {"label": "Burger Blueprint", "image": "/robots/blueprints/burgerrobot.png"},
         ],
     },
 }

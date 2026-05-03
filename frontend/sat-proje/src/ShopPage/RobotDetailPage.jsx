@@ -145,7 +145,7 @@ function RobotDetailPage() {
 
         <RobotFeatures features={robot.features} />
 
-        <TechSpecs specs={robot.specs} blueprints={robot.blueprints} />
+        <TechSpecs type={robot.type} specs={robot.specs} blueprints={robot.blueprints} />
 
         <RobotPackages packages={robot.packages} />
 
