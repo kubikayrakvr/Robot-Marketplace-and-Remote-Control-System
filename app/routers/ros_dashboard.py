@@ -738,71 +738,40 @@ async def video_stream(robot_id: str, token: str):
     namespace = session["namespace"]
     target_url = f"http://host.docker.internal:8080/stream?topic=/{namespace}/camera/image_raw"
 
-    # read=None is mandatory for MJPEG — the connection is held open
-    # indefinitely and frames arrive whenever the camera publishes.
-    # Default of None (no timeout) covers read/write/pool — MJPEG keeps the
-    # connection idle between frames; only connect is bounded.
+    # MJPEG over HTTP keeps the connection idle between frames — only the
+    # initial connect should be bounded. Default of None covers read/write/pool.
     timeout = httpx.Timeout(None, connect=5.0)
-    deadline = time.time() + STREAM_STARTUP_GRACE_S
-
-    # ── Eager connect with retry ──────────────────────────────────────────────
-    # We open the upstream connection here — before returning StreamingResponse —
-    # for two reasons:
-    #   1. We can read web_video_server's real Content-Type header and pass it
-    #      through verbatim. It embeds the actual multipart boundary string in
-    #      that header, and the browser uses that boundary to split the byte
-    #      stream into individual JPEG frames. Hardcoding a different boundary
-    #      (e.g. "boundarydonotcross") causes a silent mismatch: bytes arrive,
-    #      the browser can't find the expected separators, and nothing renders.
-    #   2. If the bridge is still starting we can return a real HTTP 503 instead
-    #      of a silent mid-stream close, so the frontend onError fires and the
-    #      existing retry logic in the UI kicks in correctly.
-    client = httpx.AsyncClient(timeout=timeout)
-    upstream_ctx = None
-    upstream_resp = None
-
-    while True:
-        if _instances.get(rid, {}).get("token") != token:
-            await client.aclose()
-            raise HTTPException(status_code=403, detail="Oturum geçersiz")
-        try:
-            upstream_ctx = client.stream("GET", target_url)
-            upstream_resp = await upstream_ctx.__aenter__()
-            break  # connected
-        except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
-            upstream_ctx = None
-            if time.time() > deadline:
-                await client.aclose()
-                print(f"[stream] {rid}: bridge did not become ready within "
-                      f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
-                raise HTTPException(status_code=503, detail="Kamera köprüsü hazır değil.")
-            await asyncio.sleep(1.0)
-        except Exception as e:
-            await client.aclose()
-            print(f"[stream] {rid}: unexpected connect error: {e!r}")
-            raise HTTPException(status_code=503, detail="Stream bağlantısı başarısız.")
-
-    # Pass web_video_server's Content-Type through unchanged so the browser
-    # receives the correct boundary string for this specific stream instance.
-    content_type = upstream_resp.headers.get(
-        "content-type",
-        "multipart/x-mixed-replace; boundary=boundarydonotcross",
-    )
 
     async def stream_generator():
-        try:
-            async for chunk in upstream_resp.aiter_bytes():
-                if _instances.get(rid, {}).get("token") != token:
-                    break
-                yield chunk
-        finally:
+        deadline = time.time() + STREAM_STARTUP_GRACE_S
+        while True:
+            if _instances.get(rid, {}).get("token") != token:
+                return
             try:
-                await upstream_ctx.__aexit__(None, None, None)
-            except Exception:
-                pass
-            await client.aclose()
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream("GET", target_url) as r:
+                        async for chunk in r.aiter_bytes():
+                            if _instances.get(rid, {}).get("token") != token:
+                                return
+                            yield chunk
+                return
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                if time.time() > deadline:
+                    print(f"[stream] {rid}: bridge not ready in "
+                          f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
+                    return
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                print(f"[stream] {rid}: unexpected stream error: {e!r}")
+                return
 
-    return StreamingResponse(stream_generator(), media_type=content_type)
+    # web_video_server's actual boundary is "boundarydonotcross" (verified via
+    # `curl http://host.docker.internal:8080/stream?topic=...`), so this matches
+    # what the browser will see on the wire.
+    return StreamingResponse(
+        stream_generator(),
+        media_type="multipart/x-mixed-replace;boundary=boundarydonotcross",
+    )
 
 
 # ── Startup ────────────────────────────────────────────────────────────────────
