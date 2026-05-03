@@ -5,6 +5,7 @@ import LoginPage from './LoginPage/LoginPage';
 import UserPage from './UserPage/UserPage';
 import ProfilePage from './UserPage/ProfilePage';
 import ShopPage from './ShopPage/ShopPage';
+import RobotDetailPage from './ShopPage/RobotDetailPage';
 import CartPage from './CartPage/CartPage';
 import CheckoutPage from './CheckoutPage/CheckoutPage';
 import MyRobotsPage from './MyRobotsPage/MyRobotsPage';
@@ -69,6 +70,14 @@ function App() {
             element={
               <ProtectedRoute>
                 <ShopPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/user/shop/robot/:id"
+            element={
+              <ProtectedRoute>
+                <RobotDetailPage />
               </ProtectedRoute>
             }
           />

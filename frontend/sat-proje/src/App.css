@@ -1298,6 +1298,390 @@ button {
   font-weight: 700;
 }
 
+/* Product landing page */
+.robot-detail-page {
+  background: #020617;
+  color: #e5e7eb;
+}
+
+.robot-hero {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+.robot-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(2, 6, 23, 0.95), rgba(2, 6, 23, 0.35) 30%, rgba(2, 6, 23, 0.95));
+}
+
+.robot-hero-inner {
+  position: relative;
+  z-index: 1;
+  text-align: center;
+  padding: 0 24px;
+  max-width: 980px;
+}
+
+.robot-hero-eyebrow {
+  margin: 0 0 14px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.85rem;
+  color: #67e8f9;
+}
+
+.robot-hero h1 {
+  margin: 0;
+  font-size: clamp(2.8rem, 4vw, 5rem);
+  line-height: 1;
+}
+
+.robot-hero-tagline {
+  margin: 18px auto 28px;
+  color: #cbd5e1;
+  max-width: 720px;
+  font-size: 1.05rem;
+}
+
+.robot-hero-actions {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.hero-cta {
+  min-width: 220px;
+}
+
+.robot-hero-meta {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.robot-subnav {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: rgba(3, 10, 24, 0.98);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.robot-subnav-inner {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  padding: 12px 20px;
+  flex-wrap: wrap;
+}
+
+.subnav-link {
+  background: transparent;
+  color: #cbd5e1;
+  border: none;
+  padding: 10px 18px;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.subnav-link.active,
+.subnav-link:hover {
+  background: rgba(56, 189, 248, 0.12);
+  color: #7dd3fc;
+}
+
+.robot-detail-shell {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 40px 24px 80px;
+}
+
+.section-header {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 28px;
+}
+
+.section-eyebrow {
+  margin: 0;
+  font-size: 0.8rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: #67e8f9;
+}
+
+.robot-overview-section,
+.robot-features-section,
+.robot-tech-specs-section,
+.robot-packages-section,
+.robot-gallery-section {
+  margin-bottom: 60px;
+  background: rgba(15, 23, 42, 0.85);
+  border: 1px solid rgba(148, 163, 184, 0.16);
+  border-radius: 24px;
+  padding: 32px;
+}
+
+.overview-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 18px;
+  margin-top: 12px;
+}
+
+.metric-label {
+  display: block;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.75rem;
+  margin-bottom: 6px;
+}
+
+.overview-metrics p {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+}
+
+.robot-features-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+.feature-row {
+  display: grid;
+  grid-template-columns: 280px 1fr;
+  gap: 20px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.feature-title {
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #7dd3fc;
+  font-weight: 700;
+}
+
+.feature-body {
+  color: #cbd5e1;
+  line-height: 1.7;
+}
+
+.tech-blueprints {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+  margin-bottom: 28px;
+}
+
+.tech-blueprint-card {
+  min-height: 180px;
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.7);
+  border: 1px solid rgba(148, 163, 184, 0.14);
+  display: grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.tech-blueprint-card img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.blueprint-placeholder {
+  width: 100%;
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+  font-size: 0.95rem;
+  border: 1px dashed rgba(148, 163, 184, 0.24);
+}
+
+.tech-specs-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.tech-spec-block {
+  background: rgba(2, 6, 23, 0.9);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+  border-radius: 18px;
+  padding: 24px;
+}
+
+.tech-spec-block h3 {
+  margin: 0 0 18px;
+  font-size: 1.05rem;
+  letter-spacing: 0.04em;
+}
+
+.tech-spec-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.tech-spec-label {
+  color: #94a3b8;
+  font-size: 0.95rem;
+}
+
+.tech-spec-value {
+  color: #f8fafc;
+  font-weight: 700;
+  text-align: right;
+  min-width: 120px;
+}
+
+.package-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+
+.package-tab {
+  border: none;
+  border-radius: 999px;
+  padding: 12px 18px;
+  background: rgba(148, 163, 184, 0.08);
+  color: #cbd5e1;
+  cursor: pointer;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.package-tab.active {
+  background: #0ea5e9;
+  color: white;
+}
+
+.package-detail {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 24px;
+  align-items: center;
+}
+
+.package-detail img {
+  width: 100%;
+  border-radius: 20px;
+  object-fit: cover;
+  min-height: 260px;
+}
+
+.package-placeholder {
+  min-height: 260px;
+  background: rgba(15, 23, 42, 0.82);
+  border-radius: 20px;
+  display: grid;
+  place-items: center;
+  color: #94a3b8;
+  text-transform: uppercase;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.package-description h3 {
+  margin: 0 0 12px;
+}
+
+.package-description p {
+  color: #cbd5e1;
+  line-height: 1.75;
+}
+
+.gallery-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.gallery-item {
+  border-radius: 20px;
+  overflow: hidden;
+  background: rgba(15, 23, 42, 0.82);
+  border: 1px solid rgba(148, 163, 184, 0.12);
+}
+
+.gallery-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  min-height: 220px;
+}
+
+.product-actions-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 960px) {
+  .robot-detail-shell {
+    padding: 28px 18px 60px;
+  }
+
+  .tech-blueprints,
+  .tech-specs-grid,
+  .package-detail,
+  .gallery-grid,
+  .overview-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .feature-row {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 680px) {
+  .robot-hero h1 {
+    font-size: 2.7rem;
+  }
+
+  .robot-hero-tagline {
+    font-size: 1rem;
+  }
+
+  .robot-subnav-inner {
+    justify-content: start;
+  }
+
+  .product-actions-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
 .control-section {
   flex: 1;
   display: flex;

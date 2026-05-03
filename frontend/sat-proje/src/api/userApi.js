@@ -72,6 +72,10 @@ export function fetchMarketRobots() {
   return publicFetch('/api/robots/market');
 }
 
+export function fetchRobotDetail(robotId) {
+  return publicFetch(`/api/robots/${robotId}`);
+}
+
 // ─── SEPET ────────────────────────────────────────────────────
 
 /** Kullanıcının sepetini getirir */

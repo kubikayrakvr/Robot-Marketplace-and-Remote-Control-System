@@ -101,14 +101,23 @@ function ShopPage() {
                     <span className="product-price">
                       {robot.price.toLocaleString('tr-TR')} ₺
                     </span>
-                    <button
-                      type="button"
-                      className={`primary-button add-button ${robot.stock_count === 0 ? 'disabled' : ''}`}
-                      onClick={() => handleAddToCart(robot)}
-                      disabled={addingId === robot.id || robot.stock_count === 0}
-                    >
-                      {robot.stock_count === 0 ? 'Stokta Yok' : (addingId === robot.id ? 'Ekleniyor...' : 'Sepete Ekle')}
-                    </button>
+                    <div className="product-actions-row">
+                      <button
+                        type="button"
+                        className={`primary-button add-button ${robot.stock_count === 0 ? 'disabled' : ''}`}
+                        onClick={() => handleAddToCart(robot)}
+                        disabled={addingId === robot.id || robot.stock_count === 0}
+                      >
+                        {robot.stock_count === 0 ? 'Stokta Yok' : (addingId === robot.id ? 'Ekleniyor...' : 'Sepete Ekle')}
+                      </button>
+                      <button
+                        type="button"
+                        className="secondary-button"
+                        onClick={() => navigate(`/user/shop/robot/${robot.id}`)}
+                      >
+                        Detay
+                      </button>
+                    </div>
                   </div>
                 </div>
               ))

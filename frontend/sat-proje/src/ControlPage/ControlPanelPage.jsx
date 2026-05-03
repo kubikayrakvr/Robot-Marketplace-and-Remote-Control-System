@@ -710,7 +710,7 @@ function ControlPanelPage() {
             </div>
           ) : hasScan ? (
             <div className="panel radar-panel radar-panel-large">
-              <div className="panel-header">🎯 LIDAR Radar</div>
+              <div className="panel-header">🎯 LIDAR</div>
               <div className="radar-wrapper">
                 <canvas ref={canvasRef} width={360} height={360} className="radar-canvas" />
                 <div className="radar-meta">
@@ -745,7 +745,7 @@ function ControlPanelPage() {
 
             {hasCamera && hasScan && (
               <div className="panel radar-panel">
-                <div className="panel-header">🎯 LIDAR Radar</div>
+                <div className="panel-header">🎯 LIDAR</div>
                 <div className="radar-wrapper">
                   <canvas ref={canvasRef} width={200} height={200} className="radar-canvas" />
                   <div className="radar-meta">
