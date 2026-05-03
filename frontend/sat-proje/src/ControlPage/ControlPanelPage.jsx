@@ -45,6 +45,10 @@ function ControlPanelPage() {
 
   // Camera retry key — incrementing this forces the <img> to remount and retry
   const [cameraKey, setCameraKey] = useState(0);
+  // cameraError: true while the stream is down and we are waiting to retry.
+  // We show a translucent overlay instead of blank alt-text so the box never
+  // collapses and the user always has visual feedback.
+  const [cameraError, setCameraError] = useState(false);
 
   // ── Telemetry state (relay-driven) ───────────────────────────────────
   const [odom, setOdom] = useState({ x: 0, y: 0, ts: 0 });
@@ -675,19 +679,80 @@ function ControlPanelPage() {
           {hasCamera ? (
             <div className="panel camera-panel">
               <div className="panel-header">Ana Kamera</div>
-              <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
+              {/*
+                The feed container is locked to 16:9 so the box never resizes
+                when the stream drops — width: 100% fills the panel, and
+                aspectRatio drives the height deterministically.
+              */}
+              <div
+                className="camera-feed"
+                style={{
+                  padding: 0,
+                  overflow: 'hidden',
+                  position: 'relative',
+                  width: '100%',
+                  aspectRatio: '16 / 9',
+                  background: '#000',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  flexShrink: 0,
+                }}
+              >
                 {sessionToken ? (
-                  <img
-                    key={cameraKey}
-                    src={getRosStreamUrl(rosRobotId, sessionToken)}
-                    alt="Robot Kamera Akışı"
-                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    onError={() => {
-                      setTimeout(() => setCameraKey(k => k + 1), 2000);
-                    }}
-                  />
+                  <>
+                    {/*
+                      key remounts the element to force the browser to open a
+                      fresh HTTP connection to the MJPEG endpoint.
+                      alt="" — empty so no text renders during a retry gap.
+                      onLoad clears the error overlay as soon as pixels arrive.
+                      onError waits 3 s then retries; during that window the
+                      semi-transparent overlay below gives feedback without
+                      removing the last good frame from view (the browser keeps
+                      the previous img painted until the new element replaces it).
+                    */}
+                    <img
+                      key={cameraKey}
+                      src={getRosStreamUrl(rosRobotId, sessionToken)}
+                      alt=""
+                      style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'contain',
+                        display: 'block',
+                      }}
+                      onLoad={() => setCameraError(false)}
+                      onError={() => {
+                        setCameraError(true);
+                        setTimeout(() => {
+                          setCameraKey(k => k + 1);
+                          // Error overlay stays until onLoad fires on the new img
+                        }, 3000);
+                      }}
+                    />
+                    {cameraError && (
+                      <div style={{
+                        position: 'absolute',
+                        inset: 0,
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.5rem',
+                        background: 'rgba(0, 0, 0, 0.65)',
+                        color: '#94a3b8',
+                        fontSize: '0.85rem',
+                        pointerEvents: 'none',
+                      }}>
+                        <span style={{ fontSize: '1.5rem' }}>🔄</span>
+                        Kamera yeniden bağlanıyor…
+                      </div>
+                    )}
+                  </>
                 ) : (
-                  <div className="camera-loading">Video akışı bekleniyor...</div>
+                  <div className="camera-loading" style={{ color: '#64748b' }}>
+                    Video akışı bekleniyor...
+                  </div>
                 )}
               </div>
             </div>
