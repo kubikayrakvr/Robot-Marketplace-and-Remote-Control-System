@@ -8,7 +8,8 @@ router = APIRouter(prefix="/api/robots", tags=["robots"])
 ROBOT_DETAIL_PROFILES = {
     "rob100": {
         "tagline": "Unmanned Ground Vehicle",
-        "hero_image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1600&q=80",
+        "hero_image": "https://emanual.robotis.com/assets/images/platform/turtlebot3/waffle_pi/waffle_pi.png",
+        "icon": "https://emanual.robotis.com/assets/images/platform/turtlebot3/waffle_pi/waffle_pi.png",
         "features": [
             {"title": "Autonomous Navigation", "body": "High-density mapping and reliable obstacle avoidance for laboratory and field deployments."},
             {"title": "Advanced Perception", "body": "Integrated camera and LIDAR sensor suite delivers 360° situational awareness."},
@@ -39,7 +40,8 @@ ROBOT_DETAIL_PROFILES = {
     },
     "rob200": {
         "tagline": "Field-Tested Mobility",
-        "hero_image": "https://images.unsplash.com/photo-1496307042754-b4aa456c4a2d?auto=format&fit=crop&w=1600&q=80",
+        "hero_image": "https://emanual.robotis.com/assets/images/platform/turtlebot3/burger/burger.png",
+        "icon": "https://emanual.robotis.com/assets/images/platform/turtlebot3/burger/burger.png",
         "features": [
             {"title": "Lightweight Design", "body": "Compact chassis and optimized powertrain deliver fast deployment and easy handling."},
             {"title": "Resilient Navigation", "body": "Robust path planning in corridor and warehouse environments with stable control loops."},
@@ -80,7 +82,7 @@ def get_market_robots(db: Session = Depends(get_db)):
             "description": getattr(r, "description", ""),
             "price": r.price,
             "type": getattr(r, "type", ""),
-            "icon": getattr(r, "icon", "🤖"),
+            "icon": ROBOT_DETAIL_PROFILES.get(r.ros_namespace or r.name, {}).get('icon', '🤖'),
             "stock_count": getattr(r, "stock_count", 0),
             "is_available": getattr(r, "is_available", True),
         }

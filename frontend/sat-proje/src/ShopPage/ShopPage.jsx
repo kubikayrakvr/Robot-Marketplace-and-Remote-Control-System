@@ -89,7 +89,7 @@ function ShopPage() {
             ) : (
               robots.map((robot) => (
                 <div key={robot.id} className={`product-card ${robot.stock_count === 0 ? 'out-of-stock' : ''}`}>
-                  <div className="product-icon">🤖</div>
+                  <img src={robot.icon} alt="Robot" className="product-icon" />
                   <h3 className="product-title">{robot.name}</h3>
                   <p className="product-desc">
                     {robot.model_type || 'Robot modeli'}

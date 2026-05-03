@@ -104,6 +104,10 @@ function RobotDetailPage() {
 
   return (
     <div className="robot-detail-page">
+      <button className="back-button" onClick={() => navigate('/user/shop')}>
+        ← Back to Shop
+      </button>
+
       <RobotHero
         name={robot.name}
         tagline={robot.tagline}
