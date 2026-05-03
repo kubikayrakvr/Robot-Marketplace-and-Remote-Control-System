@@ -6,6 +6,7 @@ from app.database import get_db
 from app.core.dependencies import get_current_user
 from app.models.robot import RobotInventory, UserRobot, RobotCatalog
 from app.models.audit import AuditLog
+from app.routers.robots import ROBOT_DETAIL_PROFILES
 
 router = APIRouter(prefix="/api/user-robots", tags=["user-robots"])
 
@@ -68,7 +69,7 @@ def get_my_robots(db: Session = Depends(get_db), user=Depends(get_current_user))
             "inventoryId":  str(inventory.id),
             "modelId":      str(inventory.catalog_id),
             "name":         robot_model.name if robot_model else "Bilinmeyen",
-            "icon":         getattr(robot_model, "icon", "🤖") if robot_model else "🤖",
+            "icon":         ROBOT_DETAIL_PROFILES.get(robot_model.ros_namespace or robot_model.name, {}).get("icon", getattr(robot_model, "icon", "🤖")) if robot_model else "🤖",
             "description":  getattr(robot_model, "description", "") if robot_model else "",
             "serialNumber": inventory.serial_number,
             "nickname":     ow.nickname,
@@ -144,7 +145,7 @@ def activate_robot(
                 "inventoryId":  str(item.id),
                 "modelId":      str(item.catalog_id),
                 "name":         robot_model.name if robot_model else "Bilinmeyen",
-                "icon":         getattr(robot_model, "icon", "🤖") if robot_model else "🤖",
+                "icon":         ROBOT_DETAIL_PROFILES.get(robot_model.ros_namespace or robot_model.name, {}).get("icon", getattr(robot_model, "icon", "🤖")) if robot_model else "🤖",
                 "description":  getattr(robot_model, "description", "") if robot_model else "",
                 "serialNumber": item.serial_number,
                 "nickname":     ownership.nickname,

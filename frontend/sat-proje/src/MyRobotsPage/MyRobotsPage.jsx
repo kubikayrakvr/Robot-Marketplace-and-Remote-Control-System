@@ -48,7 +48,13 @@ function MyRobotsPage() {
                     }
                   }}
                 >
-                  <div className="inventory-icon">{robot.icon || '🤖'}</div>
+                  <div className="inventory-icon">
+                    {robot.icon && robot.icon.startsWith('/') ? (
+                      <img src={robot.icon} alt="icon" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+                    ) : (
+                      robot.icon || '🤖'
+                    )}
+                  </div>
                   <div className="inventory-details">
                     <h3>{robot.nickname || robot.name}</h3>
                     <p className="inventory-badge">

@@ -8,24 +8,23 @@ router = APIRouter(prefix="/api/robots", tags=["robots"])
 ROBOT_DETAIL_PROFILES = {
     "rob100": {
         "tagline": "Unmanned Ground Vehicle",
-        "hero_image": "/robots/waffle_pi.svg",
-        "icon": "/robots/waffle_pi.svg",
+        "hero_image": "/robots/waffleicon.png",
+        "icon": "/robots/waffleicon.png",
         "features": [
             {"title": "Autonomous Navigation", "body": "High-density mapping and reliable obstacle avoidance for laboratory and field deployments."},
             {"title": "Advanced Perception", "body": "Integrated camera and LIDAR sensor suite delivers 360° situational awareness."},
             {"title": "Modular Payload", "body": "Easy accessory mounting and rapid tool swaps for research, inspection, and delivery."},
         ],
         "specs": {
-            "dimensions": "450 x 385 x 150 mm",
-            "weight": "6.5 kg",
-            "maxPayload": "3.2 kg",
+            "dimensions": "281 x 306 x 141 mm",
+            "weight": "1.8 kg",
             "maxSpeed": "1.4 m/s",
             "runTime": "4.2 hours",
             "battery": "Li-ion 22Ah / 48V",
         },
         "packages": [
-            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.svg", "description": "Reliable wheel odometry with drift-correction for indoor research missions."},
-            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Full 360° LIDAR package for robust navigation in dynamic environments."},
+            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.png", "description": "Reliable wheel odometry with drift-correction for indoor research missions."},
+            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.png", "description": "Full 360° LIDAR package for robust navigation in dynamic environments."},
         ],
         "gallery": [
             "/robots/waffle_gallery/1.png",
@@ -38,24 +37,23 @@ ROBOT_DETAIL_PROFILES = {
     },
     "rob200": {
         "tagline": "Field-Tested Mobility",
-        "hero_image": "/robots/burger.svg",
-        "icon": "/robots/burger.svg",
+        "hero_image": "/robots/burgericon.png",
+        "icon": "/robots/burgericon.png",
         "features": [
             {"title": "Lightweight Design", "body": "Compact chassis and optimized powertrain deliver fast deployment and easy handling."},
             {"title": "Resilient Navigation", "body": "Robust path planning in corridor and warehouse environments with stable control loops."},
             {"title": "Extended Battery", "body": "Optimized power management extends runtime for longer experiments and training sessions."},
         ],
         "specs": {
-            "dimensions": "420 x 350 x 145 mm",
-            "weight": "5.2 kg",
-            "maxPayload": "2.0 kg",
+            "dimensions": "138 x 178 x 192 mm",
+            "weight": "1 kg",
             "maxSpeed": "1.2 m/s",
             "runTime": "3.8 hours",
             "battery": "Li-ion 18Ah / 48V",
         },
         "packages": [
-            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.svg", "description": "Proven odometry package for indoor navigation and consistent path tracking."},
-            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Enhanced scanning package for dense mapping and slow-speed obstacle detection."},
+            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.png", "description": "Proven odometry package for indoor navigation and consistent path tracking."},
+            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.png", "description": "Enhanced scanning package for dense mapping and slow-speed obstacle detection."},
         ],
         "gallery": [
             "/robots/burger_gallery/1.png",

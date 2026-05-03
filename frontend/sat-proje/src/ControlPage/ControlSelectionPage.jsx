@@ -149,7 +149,13 @@ function ControlSelectionPage() {
                 return (
                   <div key={robot.instanceId} className="panel robot-card">
                     <div className="card-info">
-                      <div className="robot-icon">{robot.icon || '🤖'}</div>
+                      <div className="robot-icon">
+                        {robot.icon && robot.icon.startsWith('/') ? (
+                          <img src={robot.icon} alt="icon" style={{ width: '40px', height: '40px', objectFit: 'contain' }} />
+                        ) : (
+                          robot.icon || '🤖'
+                        )}
+                      </div>
                       <div className="robot-details">
                         <h3>{robot.nickname || robot.name}</h3>
                         <p className="robot-meta">ROS ID: <span className="ns-tag-inline">{robot.rosRobotId}</span></p>

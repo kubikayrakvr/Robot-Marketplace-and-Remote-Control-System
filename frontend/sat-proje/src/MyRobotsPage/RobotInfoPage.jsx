@@ -43,7 +43,13 @@ function RobotInfoPage() {
 
         <section className="robot-info-content">
           <div className="info-card">
-            <div className="info-icon">{robot.icon || '🤖'}</div>
+            <div className="info-icon">
+              {robot.icon && robot.icon.startsWith('/') ? (
+                <img src={robot.icon} alt="icon" style={{ width: '48px', height: '48px', objectFit: 'contain' }} />
+              ) : (
+                robot.icon || '🤖'
+              )}
+            </div>
             <div className="info-stats">
               <div className="stat-box">
                 <span className="stat-label">Durum</span>

@@ -42,7 +42,7 @@ export default function TechSpecs({ type, specs = {}, blueprints = [] }) {
           <h3>SIZE AND WEIGHT</h3>
           {renderSpecRow('Dimensions', specs.dimensions)}
           {renderSpecRow('Weight', specs.weight)}
-          {renderSpecRow('Max Payload', specs.maxPayload)}
+          {specs.maxPayload && renderSpecRow('Max Payload', specs.maxPayload)}
         </div>
         <div className="tech-spec-block">
           <h3>SPEED AND PERFORMANCE</h3>
