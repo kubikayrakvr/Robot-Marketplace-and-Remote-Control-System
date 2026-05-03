@@ -693,10 +693,14 @@ function ControlPanelPage() {
                   <img
                     key={cameraKey}
                     src={getRosStreamUrl(rosRobotId, sessionToken)}
+                    // crossOrigin flips the request to CORS mode so the
+                    // multipart/x-mixed-replace response is not opaque —
+                    // without it Firefox's ORB blocks the body even though
+                    // CORSMiddleware would otherwise allow it.
+                    crossOrigin="anonymous"
                     alt=""
                     style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
                     onError={() => {
-                      // HTTP failure — retry sooner than the periodic 10 s cycle
                       clearTimeout(cameraTimerRef.current);
                       cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 3000);
                     }}
