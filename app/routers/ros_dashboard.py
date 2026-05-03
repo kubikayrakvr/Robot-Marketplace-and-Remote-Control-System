@@ -37,6 +37,7 @@ router = APIRouter(prefix="/ros", tags=["ROS Dashboard"])
 SESSION_TIMEOUT_S = 15.0
 ONLINE_THRESHOLD_S = 5.0
 SPAWN_RESPONSE_TIMEOUT_S = 10.0
+STREAM_STARTUP_GRACE_S = 12.0   # max seconds to wait for the camera bridge to come up
 DEFAULT_SPAWN = (1.0, 0.0, 0.0)        # x, y, theta when last_* is NULL
 DEFAULT_BATTERY_PCT = 100.0
 
@@ -736,14 +737,41 @@ async def video_stream(robot_id: str, token: str):
 
     namespace = session["namespace"]
     target_url = f"http://172.17.0.1:8080/stream?topic=/{namespace}/camera/image_raw"
-    
+
     async def stream_generator():
-        async with httpx.AsyncClient() as client:
-            async with client.stream("GET", target_url) as r:
-                async for chunk in r.aiter_bytes():
-                    if _instances.get(rid, {}).get("token") != token:
-                        break
-                    yield chunk
+        deadline = time.time() + STREAM_STARTUP_GRACE_S
+        # read=None is mandatory for MJPEG — the connection is held open
+        # indefinitely and frames arrive whenever the camera publishes.
+        # The 5s default httpx read timeout would kill the stream after
+        # the first quiet period, which races against bridge startup.
+        timeout = httpx.Timeout(connect=5.0, read=None)
+
+        while True:
+            # Session was revoked while waiting to retry — stop immediately.
+            if _instances.get(rid, {}).get("token") != token:
+                return
+
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream("GET", target_url) as r:
+                        async for chunk in r.aiter_bytes():
+                            if _instances.get(rid, {}).get("token") != token:
+                                return
+                            yield chunk
+                return  # clean end-of-stream
+
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                # Bridge subprocess not up yet, or no frames during startup —
+                # retry every second until the grace window expires.
+                if time.time() > deadline:
+                    print(f"[stream] {rid}: bridge did not become ready within "
+                          f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
+                    return
+                await asyncio.sleep(1.0)
+
+            except Exception as e:
+                print(f"[stream] {rid}: unexpected stream error: {e!r}")
+                return
 
     return StreamingResponse(
         stream_generator(),
