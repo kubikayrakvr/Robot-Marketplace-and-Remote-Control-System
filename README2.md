@@ -1,5 +1,3 @@
-İki farklı dosyadan aldığım bilgileri çakışmaları gidererek (örneğin güncel versiyon numaralarını baz alarak) tek, akıcı ve profesyonel bir `README.md` formatında birleştirdim. Projenin kök dizinine doğrudan kaydedip kullanabilirsiniz:
-
 ***
 
 # 🤖 RoboFleet — Hizmet Robotu Satış ve Uzaktan Yönetim Sistemi
