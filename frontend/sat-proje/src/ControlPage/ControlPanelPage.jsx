@@ -1,4 +1,3 @@
-import '../roslib.min.js';
 import { useEffect, useState, useRef, useCallback } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useRobots } from '../context/RobotContext';
@@ -19,7 +18,7 @@ const API_HB_INTERVAL_MS = 10000;
 const PING_INTERVAL_MS = 1000;
 const POSE_STALE_MS = 2000;          // ground_truth → odom fallback threshold
 const ODOM_STALE_MS = 10000;         // odom silent for this long → "Target Lost"
-const WATCHDOG_TICK_MS = 1000;
+const WATCHDOG_TICK_MS = 500;
 const JOYSTICK_RADIUS = 75;
 const RAD_TO_DEG = 180 / Math.PI;
 
