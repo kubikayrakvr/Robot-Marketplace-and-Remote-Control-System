@@ -744,26 +744,44 @@ async def video_stream(robot_id: str, token: str):
 
     async def stream_generator():
         deadline = time.time() + STREAM_STARTUP_GRACE_S
-        while True:
-            if _instances.get(rid, {}).get("token") != token:
-                return
-            try:
-                async with httpx.AsyncClient(timeout=timeout) as client:
-                    async with client.stream("GET", target_url) as r:
-                        async for chunk in r.aiter_bytes():
-                            if _instances.get(rid, {}).get("token") != token:
-                                return
-                            yield chunk
-                return
-            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
-                if time.time() > deadline:
-                    print(f"[stream] {rid}: bridge not ready in "
-                          f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
+        total_bytes = 0
+        chunks = 0
+        t0 = time.time()
+        print(f"[stream] {rid}: BEGIN token=[{token[:8]}…] target={target_url}")
+        try:
+            while True:
+                if _instances.get(rid, {}).get("token") != token:
+                    print(f"[stream] {rid}: token-mismatch before connect; aborting")
                     return
-                await asyncio.sleep(1.0)
-            except Exception as e:
-                print(f"[stream] {rid}: unexpected stream error: {e!r}")
-                return
+                try:
+                    async with httpx.AsyncClient(timeout=timeout) as client:
+                        async with client.stream("GET", target_url) as r:
+                            print(f"[stream] {rid}: upstream {r.status_code} "
+                                  f"ct={r.headers.get('content-type')!r}")
+                            async for chunk in r.aiter_bytes():
+                                if _instances.get(rid, {}).get("token") != token:
+                                    print(f"[stream] {rid}: token-mismatch mid-stream "
+                                          f"after {total_bytes}B/{chunks} chunks")
+                                    return
+                                total_bytes += len(chunk)
+                                chunks += 1
+                                yield chunk
+                    print(f"[stream] {rid}: upstream EOF after {total_bytes}B/"
+                          f"{chunks} chunks in {time.time()-t0:.1f}s")
+                    return
+                except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                    if time.time() > deadline:
+                        print(f"[stream] {rid}: bridge not ready in "
+                              f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
+                        return
+                    await asyncio.sleep(1.0)
+                except Exception as e:
+                    print(f"[stream] {rid}: unexpected stream error: {e!r} "
+                          f"after {total_bytes}B/{chunks} chunks")
+                    return
+        finally:
+            print(f"[stream] {rid}: END {total_bytes}B/{chunks} chunks "
+                  f"in {time.time()-t0:.1f}s")
 
     # web_video_server's actual boundary is "boundarydonotcross" (verified via
     # `curl http://host.docker.internal:8080/stream?topic=...`), so this matches
