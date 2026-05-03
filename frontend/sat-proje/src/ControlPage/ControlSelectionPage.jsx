@@ -43,7 +43,7 @@ function ControlSelectionPage() {
             <p className="user-eyebrow">Simulasyon Baglantisi</p>
             <h1>Kontrol Paneli</h1>
             <p className="user-subtitle">
-              Gazebo sunucusuna baglanmak ve kontrol etmek icin bir robot secin.
+              Baglanmak ve kontrol etmek icin bir robot secin.
             </p>
           </div>
           <div className="user-meta">

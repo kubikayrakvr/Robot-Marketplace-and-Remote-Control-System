@@ -681,7 +681,7 @@ function ControlPanelPage() {
         <div className="visual-col">
           {hasCamera ? (
             <div className="panel camera-panel">
-              <div className="panel-header">Ana Kamera (Gazebo)</div>
+              <div className="panel-header">Ana Kamera</div>
               <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
                 {sessionToken ? (
                   <img
@@ -755,7 +755,7 @@ function ControlPanelPage() {
           <div className="panel-section">
             <div className="panel-header">
               Telemetri
-              <span className="hint">· {isWorldFresh ? 'Gazebo Ground Truth' : 'Ground Truth bekleniyor'}</span>
+              <span className="hint">· {isWorldFresh ? '' : 'Odometri bekleniyor'}</span>
             </div>
             <div className="telemetry-grid telem-3x2">
               <div className="telemetry-box">
