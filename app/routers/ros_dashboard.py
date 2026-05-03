@@ -742,46 +742,53 @@ async def video_stream(robot_id: str, token: str):
     # initial connect should be bounded. Default of None covers read/write/pool.
     timeout = httpx.Timeout(None, connect=5.0)
 
+    # web_video_server hangs up after sending only the multipart boundary
+    # (~22 B) on the very first connect after the camera bridge subscribes.
+    # The browser receives a valid HTTP 200 with no parsable frame, doesn't
+    # fire onError, and the panel stays blank. We treat any upstream EOF that
+    # delivers fewer than this many bytes as a startup stub and reconnect —
+    # without yielding the stub to the browser. A real first JPEG frame is
+    # several KB, so the threshold is comfortably above any plausible stub.
+    HEALTHY_BYTES = 1024
+
     async def stream_generator():
         deadline = time.time() + STREAM_STARTUP_GRACE_S
-        total_bytes = 0
-        chunks = 0
-        t0 = time.time()
-        print(f"[stream] {rid}: BEGIN token=[{token[:8]}…] target={target_url}")
-        try:
-            while True:
-                if _instances.get(rid, {}).get("token") != token:
-                    print(f"[stream] {rid}: token-mismatch before connect; aborting")
-                    return
-                try:
-                    async with httpx.AsyncClient(timeout=timeout) as client:
-                        async with client.stream("GET", target_url) as r:
-                            print(f"[stream] {rid}: upstream {r.status_code} "
-                                  f"ct={r.headers.get('content-type')!r}")
-                            async for chunk in r.aiter_bytes():
-                                if _instances.get(rid, {}).get("token") != token:
-                                    print(f"[stream] {rid}: token-mismatch mid-stream "
-                                          f"after {total_bytes}B/{chunks} chunks")
-                                    return
-                                total_bytes += len(chunk)
-                                chunks += 1
+        while True:
+            if _instances.get(rid, {}).get("token") != token:
+                return
+            if time.time() > deadline:
+                print(f"[stream] {rid}: deadline reached; giving up")
+                return
+            try:
+                async with httpx.AsyncClient(timeout=timeout) as client:
+                    async with client.stream("GET", target_url) as r:
+                        buf = b""
+                        live = False
+                        async for chunk in r.aiter_bytes():
+                            if _instances.get(rid, {}).get("token") != token:
+                                return
+                            if live:
                                 yield chunk
-                    print(f"[stream] {rid}: upstream EOF after {total_bytes}B/"
-                          f"{chunks} chunks in {time.time()-t0:.1f}s")
+                                continue
+                            buf += chunk
+                            if len(buf) >= HEALTHY_BYTES:
+                                live = True
+                                yield buf
+                                buf = b""
+                        if not live:
+                            print(f"[stream] {rid}: upstream stub ({len(buf)}B); "
+                                  "retrying")
+                            await asyncio.sleep(0.3)
+                            continue
+                return
+            except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
+                if time.time() > deadline:
+                    print(f"[stream] {rid}: bridge not ready ({e!r}); giving up")
                     return
-                except (httpx.ConnectError, httpx.ReadTimeout, httpx.RemoteProtocolError) as e:
-                    if time.time() > deadline:
-                        print(f"[stream] {rid}: bridge not ready in "
-                              f"{STREAM_STARTUP_GRACE_S}s ({e!r}); giving up.")
-                        return
-                    await asyncio.sleep(1.0)
-                except Exception as e:
-                    print(f"[stream] {rid}: unexpected stream error: {e!r} "
-                          f"after {total_bytes}B/{chunks} chunks")
-                    return
-        finally:
-            print(f"[stream] {rid}: END {total_bytes}B/{chunks} chunks "
-                  f"in {time.time()-t0:.1f}s")
+                await asyncio.sleep(1.0)
+            except Exception as e:
+                print(f"[stream] {rid}: unexpected error: {e!r}")
+                return
 
     # web_video_server's actual boundary is "boundarydonotcross" (verified via
     # `curl http://host.docker.internal:8080/stream?topic=...`), so this matches
