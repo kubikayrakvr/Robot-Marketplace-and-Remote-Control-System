@@ -4,7 +4,7 @@ function LandingPage() {
   return (
     <div className="landing-container">
       <header className="landing-header">
-        <div className="logo">ROBO BASE</div>
+        <div className="logo">ROBOFLEET</div>
         <nav className="landing-nav">
           <Link to="/login" className="text-button">
             Giriş yap

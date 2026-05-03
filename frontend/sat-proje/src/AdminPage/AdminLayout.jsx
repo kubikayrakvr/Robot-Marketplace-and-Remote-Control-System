@@ -19,7 +19,7 @@ function AdminLayout({ children }) {
     <div className="admin-layout">
       <aside className="admin-sidebar">
         <div className="admin-sidebar-brand">
-          <h2><span className="brand-icon">⚙️</span> ROBO BASE</h2>
+          <h2><span className="brand-icon">⚙️</span> ROBOFLEET</h2>
           <p>Yönetim Paneli</p>
         </div>
 

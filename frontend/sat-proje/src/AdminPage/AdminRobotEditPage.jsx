@@ -9,7 +9,7 @@ function AdminRobotEditPage() {
 
   const [formData, setFormData] = useState({
     name: '',
-    model_type: '',
+    type: '',
     price: '',
     stock_count: '',
     is_available: true,
@@ -27,7 +27,7 @@ function AdminRobotEditPage() {
         } else {
           setFormData({
             name: found.name,
-            model_type: found.model_type,
+            type: found.type,
             price: found.price,
             stock_count: found.stock_count,
             is_available: found.is_available,
@@ -63,7 +63,7 @@ function AdminRobotEditPage() {
     try {
       await updateRobot(id, {
         name: formData.name,
-        type: formData.model_type,
+        type: formData.type,
         price: Number(formData.price),
         stock_count: Number(formData.stock_count),
         is_available: formData.is_available,
@@ -124,7 +124,7 @@ function AdminRobotEditPage() {
             <input
               id="robot-model"
               type="text"
-              value={formData.model_type}
+              value={formData.type}
               readOnly
               style={{ width: '100%', padding: '10px', borderRadius: '8px', background: '#1e293b', border: '1px solid #334155', color: '#94a3b8', cursor: 'not-allowed' }}
             />

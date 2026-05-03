@@ -112,8 +112,21 @@ function AdminRobotsPage() {
               {robots.map(robot => (
                 <tr key={robot.id}>
                   <td>#{robot.id}</td>
-                  <td className="robot-name">{robot.name}</td>
-                  <td>{robot.model_type}</td>
+                  <td className="robot-name">
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ width: '32px', height: '32px', background: 'rgba(255,255,255,0.05)', borderRadius: '6px', display: 'flex', alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
+                        {robot.ros_namespace === 'rob100' ? (
+                          <img src="/robots/waffleicon.png" alt="Waffle" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                        ) : robot.ros_namespace === 'rob200' ? (
+                          <img src="/robots/burgericon.png" alt="Burger" style={{ width: '24px', height: '24px', objectFit: 'contain' }} />
+                        ) : (
+                          '🤖'
+                        )}
+                      </div>
+                      {robot.name}
+                    </div>
+                  </td>
+                  <td>{robot.type}</td>
                   <td>{robot.price.toLocaleString('tr-TR')} ₺</td>
                   <td>{robot.stock_count}</td>
                   <td>

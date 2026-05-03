@@ -59,7 +59,15 @@ function AdminRobotInfoPage() {
       </div>
 
       <div className="admin-detail-hero">
-        <div className="admin-detail-avatar robot-avatar">🤖</div>
+        <div className="admin-detail-avatar robot-avatar">
+          {robot.ros_namespace === 'rob100' ? (
+            <img src="/robots/waffleicon.png" alt="Waffle" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          ) : robot.ros_namespace === 'rob200' ? (
+            <img src="/robots/burgericon.png" alt="Burger" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          ) : (
+            '🤖'
+          )}
+        </div>
         <div className="admin-detail-title">
           <h1>{robot.name}</h1>
           <p>Model: {robot.type} &middot; ID: #{robot.id}</p>
