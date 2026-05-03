@@ -740,7 +740,9 @@ async def video_stream(robot_id: str, token: str):
 
     # read=None is mandatory for MJPEG — the connection is held open
     # indefinitely and frames arrive whenever the camera publishes.
-    timeout = httpx.Timeout(connect=5.0, read=None)
+    # Default of None (no timeout) covers read/write/pool — MJPEG keeps the
+    # connection idle between frames; only connect is bounded.
+    timeout = httpx.Timeout(None, connect=5.0)
     deadline = time.time() + STREAM_STARTUP_GRACE_S
 
     # ── Eager connect with retry ──────────────────────────────────────────────
