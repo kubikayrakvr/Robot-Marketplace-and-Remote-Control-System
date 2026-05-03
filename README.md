@@ -333,17 +333,33 @@ docker exec sat0_postgres psql -U kullanici -d robofleet_db -c \
 ### Faydalı Veritabanı Komutları
 
 ```bash
-# Sistemdeki robotları listele
-docker exec sat0_postgres psql -U kullanici -d robofleet_db -c \
-  "SELECT id, name, stock_count, ros_namespace FROM robot_catalog;"
-
-# Son güvenlik logları ve şüpheli hareketler
-docker exec sat0_postgres psql -U kullanici -d robofleet_db -c \
-  "SELECT action, ip_address, timestamp FROM audit_logs ORDER BY timestamp DESC LIMIT 20;"
-
-# Aktif kullanıcıları göster
-docker exec sat0_postgres psql -U kullanici -d robofleet_db -c \
-  "SELECT id, email, is_admin, is_active FROM users;"
+# Tüm kullanıcılar
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT id, email, username, is_admin FROM users;"
+ 
+# Tüm robotlar
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT id, name, stock_count, ros_namespace FROM robot_catalog;"
+ 
+# Son güvenlik logları
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT action, ip_address, timestamp FROM audit_logs \
+       ORDER BY timestamp DESC LIMIT 20;"
+ 
+# Başarısız girişler
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT * FROM audit_logs WHERE action = 'LOGIN_FAILED';"
+ 
+# Robot komut logları
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT * FROM audit_logs WHERE action = 'ROBOT_COMMAND';"
+ 
+# Şüpheli IP'ler (son 10 dakika, 5+ başarısız deneme)
+docker exec sat0_postgres psql -U user -d robot_db \
+   -c "SELECT ip_address, COUNT(*) FROM audit_logs \
+       WHERE action LIKE '%FAILED%' \
+       AND timestamp > NOW() - INTERVAL '10 minutes' \
+       GROUP BY ip_address HAVING COUNT(*) >= 5;"
 ```
 
 ### 🛡️ Otomatik IP Engelleme Sistemi
@@ -549,19 +565,12 @@ Projeye katkıda bulunmak için:
 
 | Rol | Sorumlu |
 |---|---|
-| Proje Yöneticisi & Sistem Analisti | Senanur DİNÇEL |
+| Proje Yöneticisi & Sistem Analisti | Senanur DİNCEL |
 | Backend Geliştirici | Şevval ÇABUK |
 | Frontend Geliştirici | Hasan Altan TURAN |
 | Robotik / Simülasyon Mühendisi | Kubilay Kayra KIVRAK |
 | QA / Test | Buse Selin TAVLAK |
 
----
-
-## 📞 İletişim ve Destek
-
-Sorular veya sorunlar için:
-- GitHub Issues'ı kullanın
-- Proje yöneticileriyle iletişime geçin
 
 ---
 
