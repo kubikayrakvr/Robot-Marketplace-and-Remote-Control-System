@@ -18,7 +18,7 @@ const API_HB_INTERVAL_MS = 10000;
 const PING_INTERVAL_MS = 1000;
 const POSE_STALE_MS = 2000;          // ground_truth → odom fallback threshold
 const ODOM_STALE_MS = 10000;         // odom silent for this long → "Target Lost"
-const WATCHDOG_TICK_MS = 500;
+const WATCHDOG_TICK_MS = 1000;
 const JOYSTICK_RADIUS = 75;
 const RAD_TO_DEG = 180 / Math.PI;
 
@@ -42,6 +42,9 @@ function ControlPanelPage() {
   const [isStale, setIsStale] = useState(true);
   const [hasEverReceivedTelemetry, setHasEverReceivedTelemetry] = useState(false);
   const [isPoseStale, setIsPoseStale] = useState(true);
+
+  // Camera retry key — incrementing this forces the <img> to remount and retry
+  const [cameraKey, setCameraKey] = useState(0);
 
   // ── Telemetry state (relay-driven) ───────────────────────────────────
   const [odom, setOdom] = useState({ x: 0, y: 0, ts: 0 });
@@ -119,13 +122,13 @@ function ControlPanelPage() {
     }
   }, []);
 
-  // 🕒 HAREKETSİZLİK TAKİBİ: Arka planda süreyi kontrol eden kontrolcü[cite: 77]
+  // 🕒 HAREKETSİZLİK TAKİBİ: Arka planda süreyi kontrol eden kontrolcü
   useEffect(() => {
     const idleInterval = setInterval(() => {
       // Sadece bağlantı varken ve popup kapalıyken kontrol et
       if (status === 'Bağlandı' && !showIdlePopup) {
         const secondsIdle = (Date.now() - lastActivityRef.current) / 1000;
-        if (secondsIdle > 120) { // 2 dakika sınırı[cite: 77]
+        if (secondsIdle > 120) { // 2 dakika sınırı
           emergencyStop(); // Önce robotu durdur
           setShowIdlePopup(true);
         }
@@ -314,9 +317,6 @@ function ControlPanelPage() {
 
     let isMounted = true;
     let currentToken = null;
-    // The per-instance namespace ("rob100_7") is supplied by the claim
-    // response. Don't try to derive it client-side from the rosRobotId since
-    // the format ("ROB-100-7") doesn't map cleanly back to the underscore.
     let ns = null;
 
     async function connect() {
@@ -341,9 +341,6 @@ function ControlPanelPage() {
         if (detail && Array.isArray(detail.sensors)) {
           setSensors(detail.sensors);
         }
-        // Seed battery from whichever source has a value — claim response
-        // wins (it reflects the spawner-side starting value), then fall back
-        // to the cached robot detail.
         if (typeof claim.battery_pct === 'number') {
           setBatteryPct(claim.battery_pct);
         } else if (detail && typeof detail.battery_pct === 'number') {
@@ -596,9 +593,6 @@ function ControlPanelPage() {
     ? (hasEverReceivedTelemetry ? 'disconnected' : 'connecting')
     : (isConnected ? 'connected' : 'connecting');
 
-  // World coordinates and heading come strictly from /ground_truth — never
-  // fall back to /odom (which drifts and lies after collisions). When the
-  // ground-truth stream is stale we render a placeholder instead.
   const isWorldFresh = !isPoseStale && pose.ts > 0;
   const worldX = isWorldFresh ? pose.wx : null;
   const worldY = isWorldFresh ? pose.wy : null;
@@ -624,7 +618,7 @@ function ControlPanelPage() {
 
   return (
     <div className="control-station">
-      {/* 🕒 HAREKETSİZLİK TAKİBİ: Popup Modal Bileşeni[cite: 77] */}
+      {/* 🕒 HAREKETSİZLİK TAKİBİ: Popup Modal */}
       {showIdlePopup && (
         <div style={{
           position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
@@ -684,18 +678,17 @@ function ControlPanelPage() {
               <div className="camera-feed" style={{ padding: 0, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#000' }}>
                 {sessionToken ? (
                   <img
+                    key={cameraKey}
                     src={getRosStreamUrl(rosRobotId, sessionToken)}
                     alt="Robot Kamera Akışı"
                     style={{ width: '100%', height: '100%', objectFit: 'contain' }}
-                    onError={(e) => {
-                      e.target.style.display = 'none';
-                      e.target.nextSibling.style.display = 'block';
+                    onError={() => {
+                      setTimeout(() => setCameraKey(k => k + 1), 2000);
                     }}
                   />
                 ) : (
                   <div className="camera-loading">Video akışı bekleniyor...</div>
                 )}
-                <div style={{ display: 'none', color: '#888' }}>Kamera bağlantısı kurulamadı veya yayın yok.</div>
               </div>
             </div>
           ) : hasScan ? (
