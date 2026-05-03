@@ -3,9 +3,9 @@
 <package format="3">
   <name>web_ros_custom_msgs</name>
   <version>0.0.0</version>
-  <description>TODO: Package description</description>
+  <description>Custom messages for web-based ROS integration</description>
   <maintainer email="kayra.kvr@gmail.com">qb</maintainer>
-  <license>TODO: License declaration</license>
+  <license>MIT</license>
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 

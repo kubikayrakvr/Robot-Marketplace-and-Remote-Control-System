@@ -5,8 +5,8 @@
   <name>robot_spawner</name>
   <version>0.0.0</version>
   <description>Multi-robot spawner and controller for Gazebo via ROS 2</description>
-  <maintainer email="qb@todo.todo">qb</maintainer>
-  <license>TODO</license>
+  <maintainer email="kayra.kvr@gmail.com">qb</maintainer>
+  <license>MIT</license>
 
   <!-- Build tools -->
   <buildtool_depend>ament_cmake</buildtool_depend>

@@ -11,14 +11,14 @@ function UserPage() {
   const actionCards = [
     { key: 'store', title: 'Magaza', subtitle: 'Yeni robotlari kesfet, teknik detaylari incele, satin alma adimina gec.', icon: '🛒' },
     { key: 'robots', title: 'Robotlarim', subtitle: 'Satin aldigin robotlari gor ve seri numarasi ile etkinlestir.', icon: '🤖' },
-    { key: 'control', title: 'Kontrol', subtitle: 'Gazebo sim ortamindaki robotuna baglanip uzaktan komut gonder.', icon: '🎮' },
+    { key: 'control', title: 'Kontrol', subtitle: 'Robotuna baglanip uzaktan komut gonder.', icon: '🎮' },
 
     { key: 'orders', title: 'Siparişlerim', subtitle: 'Geçmiş siparişlerinizi ve faturalarınızı görüntüleyin.', icon: '📦' },
     { key: 'reports', title: 'Raporlarım', subtitle: 'Destek talebi oluştur veya takip et.', icon: '📩' },
     { key: 'profile', title: 'Bilgilerim', subtitle: 'Profil ve hesap ayarlarini yonet.', icon: '👤' },
   ];
 
-  const displayName = user.username ?? 'Kullanıcı';
+  const displayName = user.username ?? 'Kullanıcı';2
 
   async function handleLogout() {
     try {
