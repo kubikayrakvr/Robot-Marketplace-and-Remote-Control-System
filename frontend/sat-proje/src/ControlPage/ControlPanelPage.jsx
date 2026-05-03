@@ -100,19 +100,6 @@ function ControlPanelPage() {
   useEffect(() => { linSpeedRef.current = linSpeed; }, [linSpeed]);
   useEffect(() => { angSpeedRef.current = angSpeed; }, [angSpeed]);
 
-  // ── Camera: periodic silent reconnect ────────────────────────────────────
-  // MJPEG (multipart/x-mixed-replace) does NOT fire onLoad reliably across
-  // browsers, so detecting "stream open but no frames" via onLoad is not
-  // viable. Instead, silently reconnect every 10 s — if the stream was not
-  // ready on first connect it will be picked up on the next cycle with no
-  // visible loading state. onError (genuine HTTP failure) retries sooner.
-  useEffect(() => {
-    if (!sessionToken) return;
-    clearTimeout(cameraTimerRef.current);
-    cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 10000);
-    return () => clearTimeout(cameraTimerRef.current);
-  }, [sessionToken, cameraKey]);
-
   // ── Drive command helpers ────────────────────────────────────────────
   const setDesiredVel = useCallback((linear, angular) => {
     // 🕒 HAREKETSİZLİK TAKİBİ: Komut verildiği an zamanlayıcıyı sıfırla
