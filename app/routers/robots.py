@@ -8,8 +8,8 @@ router = APIRouter(prefix="/api/robots", tags=["robots"])
 ROBOT_DETAIL_PROFILES = {
     "rob100": {
         "tagline": "Unmanned Ground Vehicle",
-        "hero_image": "https://emanual.robotis.com/assets/images/platform/turtlebot3/waffle_pi/waffle_pi.png",
-        "icon": "https://emanual.robotis.com/assets/images/platform/turtlebot3/waffle_pi/waffle_pi.png",
+        "hero_image": "/robots/waffle_pi.svg",
+        "icon": "/robots/waffle_pi.svg",
         "features": [
             {"title": "Autonomous Navigation", "body": "High-density mapping and reliable obstacle avoidance for laboratory and field deployments."},
             {"title": "Advanced Perception", "body": "Integrated camera and LIDAR sensor suite delivers 360° situational awareness."},
@@ -24,24 +24,24 @@ ROBOT_DETAIL_PROFILES = {
             "battery": "Li-ion 22Ah / 48V",
         },
         "packages": [
-            {"name": "STANDARD ODOMETRY", "image": "https://images.unsplash.com/photo-1519148246708-99b7b5f60196?auto=format&fit=crop&w=900&q=80", "description": "Reliable wheel odometry with drift-correction for indoor research missions."},
-            {"name": "LIDAR PACKAGE", "image": "https://images.unsplash.com/photo-1581091870617-3b2f76d10abd?auto=format&fit=crop&w=900&q=80", "description": "Full 360° LIDAR package for robust navigation in dynamic environments."},
+            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.svg", "description": "Reliable wheel odometry with drift-correction for indoor research missions."},
+            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Full 360° LIDAR package for robust navigation in dynamic environments."},
         ],
         "gallery": [
-            "https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1000&q=80",
-            "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80",
-            "https://images.unsplash.com/photo-1512446733611-9099a758e9b0?auto=format&fit=crop&w=1000&q=80",
+            "/robots/waffle_gallery/01.svg",
+            "/robots/waffle_gallery/02.svg",
+            "/robots/waffle_gallery/03.svg",
         ],
         "blueprints": [
-            {"label": "Top View", "image": "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=800&q=80"},
-            {"label": "Side View", "image": "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=800&q=80"},
-            {"label": "Front View", "image": "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80"},
+            {"label": "Top View", "image": "/robots/blueprints/top.svg"},
+            {"label": "Side View", "image": "/robots/blueprints/side.svg"},
+            {"label": "Front View", "image": "/robots/blueprints/front.svg"},
         ],
     },
     "rob200": {
         "tagline": "Field-Tested Mobility",
-        "hero_image": "https://emanual.robotis.com/assets/images/platform/turtlebot3/burger/burger.png",
-        "icon": "https://emanual.robotis.com/assets/images/platform/turtlebot3/burger/burger.png",
+        "hero_image": "/robots/burger.svg",
+        "icon": "/robots/burger.svg",
         "features": [
             {"title": "Lightweight Design", "body": "Compact chassis and optimized powertrain deliver fast deployment and easy handling."},
             {"title": "Resilient Navigation", "body": "Robust path planning in corridor and warehouse environments with stable control loops."},
@@ -56,18 +56,18 @@ ROBOT_DETAIL_PROFILES = {
             "battery": "Li-ion 18Ah / 48V",
         },
         "packages": [
-            {"name": "STANDARD ODOMETRY", "image": "https://images.unsplash.com/photo-1519148246708-99b7b5f60196?auto=format&fit=crop&w=900&q=80", "description": "Proven odometry package for indoor navigation and consistent path tracking."},
-            {"name": "LIDAR PACKAGE", "image": "https://images.unsplash.com/photo-1581091870617-3b2f76d10abd?auto=format&fit=crop&w=900&q=80", "description": "Enhanced scanning package for dense mapping and slow-speed obstacle detection."},
+            {"name": "STANDARD ODOMETRY", "image": "/robots/packages/odometry.svg", "description": "Proven odometry package for indoor navigation and consistent path tracking."},
+            {"name": "LIDAR PACKAGE", "image": "/robots/packages/lidar.svg", "description": "Enhanced scanning package for dense mapping and slow-speed obstacle detection."},
         ],
         "gallery": [
-            "https://images.unsplash.com/photo-1545239351-1141bd82e8a6?auto=format&fit=crop&w=1000&q=80",
-            "https://images.unsplash.com/photo-1512446733611-9099a758e9b0?auto=format&fit=crop&w=1000&q=80",
-            "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=1000&q=80",
+            "/robots/burger_gallery/01.svg",
+            "/robots/burger_gallery/02.svg",
+            "/robots/burger_gallery/03.svg",
         ],
         "blueprints": [
-            {"label": "Top View", "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80"},
-            {"label": "Side View", "image": "https://images.unsplash.com/photo-1521791136064-7986c2920216?auto=format&fit=crop&w=800&q=80"},
-            {"label": "Front View", "image": "https://images.unsplash.com/photo-1512820790803-83ca734da794?auto=format&fit=crop&w=800&q=80"},
+            {"label": "Top View", "image": "/robots/blueprints/top.svg"},
+            {"label": "Side View", "image": "/robots/blueprints/side.svg"},
+            {"label": "Front View", "image": "/robots/blueprints/front.svg"},
         ],
     },
 }
