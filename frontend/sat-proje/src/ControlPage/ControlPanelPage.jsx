@@ -43,12 +43,9 @@ function ControlPanelPage() {
   const [hasEverReceivedTelemetry, setHasEverReceivedTelemetry] = useState(false);
   const [isPoseStale, setIsPoseStale] = useState(true);
 
-  // Camera retry key — incrementing this forces the <img> to remount and retry
+  // Camera retry key — incrementing this forces the <img> to remount and retry.
   const [cameraKey, setCameraKey] = useState(0);
-  // cameraLive: true once the first MJPEG frame has been decoded (onLoad fired).
-  // Stays false while connecting or between retries so the overlay is always visible.
-  const [cameraLive, setCameraLive] = useState(false);
-  // Holds the active "no-frame" timeout so we can cancel it cleanly.
+  // Holds the active retry timer so we can cancel it on cleanup.
   const cameraTimerRef = useRef(null);
 
   // ── Telemetry state (relay-driven) ───────────────────────────────────
@@ -103,20 +100,18 @@ function ControlPanelPage() {
   useEffect(() => { linSpeedRef.current = linSpeed; }, [linSpeed]);
   useEffect(() => { angSpeedRef.current = angSpeed; }, [angSpeed]);
 
-  // ── Camera: no-frame watchdog ────────────────────────────────────────────
-  // MJPEG streams never fire onError when connected but delivering no frames
-  // (the browser gets HTTP 200 with the right content-type and just waits).
-  // So we start a 6-second countdown on every new <img> mount; if onLoad
-  // (first frame decoded) hasn't fired by then, bump the key to reconnect.
-  // onLoad cancels the timer and marks the stream live. onError also cancels
-  // and schedules a 3-second retry for genuine HTTP failures.
+  // ── Camera: periodic silent reconnect ────────────────────────────────────
+  // MJPEG (multipart/x-mixed-replace) does NOT fire onLoad reliably across
+  // browsers, so detecting "stream open but no frames" via onLoad is not
+  // viable. Instead, silently reconnect every 10 s — if the stream was not
+  // ready on first connect it will be picked up on the next cycle with no
+  // visible loading state. onError (genuine HTTP failure) retries sooner.
   useEffect(() => {
     if (!sessionToken) return;
-    setCameraLive(false);
     clearTimeout(cameraTimerRef.current);
-    cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 6000);
+    cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 10000);
     return () => clearTimeout(cameraTimerRef.current);
-  }, [cameraKey, sessionToken]);
+  }, [sessionToken, cameraKey]);
 
   // ── Drive command helpers ────────────────────────────────────────────
   const setDesiredVel = useCallback((linear, angular) => {
@@ -695,93 +690,30 @@ function ControlPanelPage() {
           {hasCamera ? (
             <div className="panel camera-panel">
               <div className="panel-header">Ana Kamera</div>
-              {/*
-                Fixed 16:9 container — the box never resizes while the stream is
-                reconnecting because width:100% + aspectRatio drives the height
-                independently of the <img> content.
-              */}
+              {/* Fixed 16:9 box — never resizes regardless of stream state */}
               <div
                 className="camera-feed"
                 style={{
                   padding: 0,
                   overflow: 'hidden',
-                  position: 'relative',
                   width: '100%',
                   aspectRatio: '16 / 9',
                   background: '#000',
                   flexShrink: 0,
                 }}
               >
-                {sessionToken ? (
-                  <>
-                    {/*
-                      alt="" — empty so no alt-text renders during the retry gap.
-                      onLoad fires when the first MJPEG frame is decoded; clears
-                        the countdown timer and marks the stream live.
-                      onError fires on genuine HTTP failures (4xx/5xx/network);
-                        schedules a 3 s retry.
-                      The 6-second countdown in the useEffect above handles the
-                        "stream open but no frames yet" case that onError misses.
-                    */}
-                    <img
-                      key={cameraKey}
-                      src={getRosStreamUrl(rosRobotId, sessionToken)}
-                      alt=""
-                      style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'contain',
-                        display: 'block',
-                      }}
-                      onLoad={() => {
-                        clearTimeout(cameraTimerRef.current);
-                        setCameraLive(true);
-                      }}
-                      onError={() => {
-                        clearTimeout(cameraTimerRef.current);
-                        setCameraLive(false);
-                        cameraTimerRef.current = setTimeout(
-                          () => setCameraKey(k => k + 1),
-                          3000,
-                        );
-                      }}
-                    />
-                    {/* Overlay visible until the first frame arrives */}
-                    {!cameraLive && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          inset: 0,
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.5rem',
-                          background: 'rgba(0, 0, 0, 0.7)',
-                          color: '#94a3b8',
-                          fontSize: '0.85rem',
-                          pointerEvents: 'none',
-                        }}
-                      >
-                        <span style={{ fontSize: '1.5rem' }}>🔄</span>
-                        Kamera bağlanıyor…
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <div
-                    className="camera-loading"
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      color: '#64748b',
+                {sessionToken && (
+                  <img
+                    key={cameraKey}
+                    src={getRosStreamUrl(rosRobotId, sessionToken)}
+                    alt=""
+                    style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block' }}
+                    onError={() => {
+                      // HTTP failure — retry sooner than the periodic 10 s cycle
+                      clearTimeout(cameraTimerRef.current);
+                      cameraTimerRef.current = setTimeout(() => setCameraKey(k => k + 1), 3000);
                     }}
-                  >
-                    Video akışı bekleniyor...
-                  </div>
+                  />
                 )}
               </div>
             </div>
