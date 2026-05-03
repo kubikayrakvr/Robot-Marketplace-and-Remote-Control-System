@@ -9,6 +9,36 @@ from app.models.audit import AuditLog
 
 router = APIRouter(prefix="/api/user-robots", tags=["user-robots"])
 
+# Sensor capabilities mirror app/routers/ros_dashboard._TYPE_SENSORS — kept here
+# so the frontend's "Robotlarım" cards can show the right chips before any ROS
+# round-trip happens.
+_NS_BASE_TO_TYPE: dict[str, str] = {
+    "rob100": "waffle",
+    "rob200": "burger",
+}
+_TYPE_SENSORS: dict[str, list[str]] = {
+    "waffle": ["imu", "scan", "camera"],
+    "burger": ["imu", "scan"],
+}
+_DEFAULT_BATTERY_PCT = 100.0
+
+
+def _derive_ros_fields(catalog: RobotCatalog | None, user_robot_id: int) -> dict:
+    if not catalog or not catalog.ros_namespace:
+        return {"rosRobotId": None, "rosNamespace": None, "rosType": None, "sensors": []}
+    base = catalog.ros_namespace
+    num_str = base.replace("rob", "")
+    if not num_str.isdigit():
+        return {"rosRobotId": None, "rosNamespace": None, "rosType": None, "sensors": []}
+    num = int(num_str)
+    rtype = _NS_BASE_TO_TYPE.get(base, "burger")
+    return {
+        "rosRobotId":  f"ROB-{num}-{user_robot_id}",
+        "rosNamespace": f"rob{num}_{user_robot_id}",
+        "rosType":      rtype,
+        "sensors":      _TYPE_SENSORS.get(rtype, ["imu"]),
+    }
+
 
 @router.get("/")
 def get_my_robots(db: Session = Depends(get_db), user=Depends(get_current_user)):
@@ -25,14 +55,13 @@ def get_my_robots(db: Session = Depends(get_db), user=Depends(get_current_user))
             continue
         robot_model = db.query(RobotCatalog).filter(RobotCatalog.id == inventory.catalog_id).first()
 
-        ros_robot_id = None
-        if robot_model and robot_model.ros_namespace:
-            num = robot_model.ros_namespace.replace("rob", "")
-            ros_robot_id = f"ROB-{num}"
+        ros_fields = _derive_ros_fields(robot_model, ow.id)
 
         warranty_end = None
         if ow.activated_at and robot_model and robot_model.warranty_months:
             warranty_end = (ow.activated_at + relativedelta(months=robot_model.warranty_months)).isoformat()
+
+        battery_pct = ow.last_battery_pct if ow.last_battery_pct is not None else _DEFAULT_BATTERY_PCT
 
         result.append({
             "instanceId":   str(ow.id),
@@ -45,7 +74,14 @@ def get_my_robots(db: Session = Depends(get_db), user=Depends(get_current_user))
             "nickname":     ow.nickname,
             "status":       "active" if inventory.is_activated else "inactive",
             "purchaseDate": ow.activated_at.isoformat() if ow.activated_at else None,
-            "rosRobotId":   ros_robot_id,
+            "rosRobotId":   ros_fields["rosRobotId"],
+            "rosNamespace": ros_fields["rosNamespace"],
+            "rosType":      ros_fields["rosType"],
+            "sensors":      ros_fields["sensors"],
+            "batteryPct":   round(battery_pct, 2),
+            "lastX":        ow.last_x,
+            "lastY":        ow.last_y,
+            "lastTheta":    ow.last_theta,
             "activationCode": inventory.activation_code,
             "warrantyMonths": robot_model.warranty_months if robot_model else 24,
             "warrantyEnd": warranty_end,
@@ -97,11 +133,8 @@ def activate_robot(
         db.refresh(ownership)
 
         robot_model = db.query(RobotCatalog).filter(RobotCatalog.id == item.catalog_id).first()
-
-        ros_robot_id = None
-        if robot_model and robot_model.ros_namespace:
-            num = robot_model.ros_namespace.replace("rob", "")
-            ros_robot_id = f"ROB-{num}"
+        ros_fields = _derive_ros_fields(robot_model, ownership.id)
+        battery_pct = ownership.last_battery_pct if ownership.last_battery_pct is not None else _DEFAULT_BATTERY_PCT
 
         return {
             "status": "success",
@@ -116,7 +149,11 @@ def activate_robot(
                 "serialNumber": item.serial_number,
                 "nickname":     ownership.nickname,
                 "status":       "active",
-                "rosRobotId":   ros_robot_id,
+                "rosRobotId":   ros_fields["rosRobotId"],
+                "rosNamespace": ros_fields["rosNamespace"],
+                "rosType":      ros_fields["rosType"],
+                "sensors":      ros_fields["sensors"],
+                "batteryPct":   round(battery_pct, 2),
             },
         }
 

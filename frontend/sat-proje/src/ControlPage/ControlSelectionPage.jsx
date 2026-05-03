@@ -95,16 +95,25 @@ function ControlSelectionPage() {
                 const isOnline   = registered && rosInfo.online;
                 const isClaimed  = registered && rosInfo.session_active;
 
-                // Three button states the user can act on:
-                //   - registered & not online → "Başlat" (clicking claims,
-                //     which fires the spawn signal; once telemetry flows the
-                //     control panel flips out of its starting-up state).
+                // Battery: prefer the live ROS view (tracks despawned-but-saved
+                // values), fall back to whatever /api/user-robots/ shipped.
+                const batteryPct = (rosInfo && typeof rosInfo.battery_pct === 'number')
+                  ? rosInfo.battery_pct
+                  : (typeof robot.batteryPct === 'number' ? robot.batteryPct : null);
+                const batteryFlat = batteryPct != null && batteryPct <= 0;
+
+                // Button states:
+                //   - registered & not online → "Başlat" (claim spawns).
                 //   - online & free → "Bağlan".
                 //   - online & busy → disabled.
+                //   - battery == 0 → "Şarj Gerekli" (disabled regardless).
                 let buttonLabel = 'Bağlan';
                 let buttonDisabled = false;
                 if (!registered) {
                   buttonLabel = 'Bağlantı Yok';
+                  buttonDisabled = true;
+                } else if (batteryFlat) {
+                  buttonLabel = 'Şarj Gerekli';
                   buttonDisabled = true;
                 } else if (isClaimed) {
                   buttonLabel = 'Meşgul';
@@ -118,6 +127,14 @@ function ControlSelectionPage() {
                   : isOnline
                     ? '🟢 Çevrimiçi'
                     : '🟡 Çevrimdışı (başlatılabilir)';
+
+                const batteryColor =
+                  batteryPct == null ? '#64748b' :
+                  batteryPct <= 15 ? '#ef4444' :
+                  batteryPct <= 35 ? '#f59e0b' : '#4ade80';
+                const batteryIcon =
+                  batteryPct == null ? '🔌' :
+                  batteryPct <= 15 ? '🪫' : '🔋';
 
                 // Sensor chips give the user an at-a-glance summary of
                 // what each robot can do, before they click into the
@@ -137,6 +154,9 @@ function ControlSelectionPage() {
                         <h3>{robot.nickname || robot.name}</h3>
                         <p className="robot-meta">ROS ID: <span className="ns-tag-inline">{robot.rosRobotId}</span></p>
                         <p className="robot-meta">{statusText}</p>
+                        <p className="robot-meta" style={{ color: batteryColor }}>
+                          {batteryIcon} Batarya: {batteryPct != null ? `${Math.round(batteryPct)}%` : '—'}
+                        </p>
                         {isClaimed && <p className="robot-busy">Kullanımda</p>}
                         {registered && (
                           <div className="sensor-chips">

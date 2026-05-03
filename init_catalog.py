@@ -37,20 +37,27 @@ FLEET = [
         "ros_namespace": "rob200",
         "stock_count":   5,
     },
-    {
-        "name":          "TurtleBot3 Waffle Pi · Lab γ",
-        "type":          "Kara Robotu (Kameralı)",
-        "price":         18000.0,
-        "description":   "ROS 2 + Gazebo lab birimi. Kamera, 360° LIDAR, 9-DOF IMU.",
-        "ros_namespace": "rob300",
-        "stock_count":   5,
-    },
 ]
+
+
+RETIRED_NAMESPACES = ["rob300"]
 
 
 def init_catalog():
     db = SessionLocal()
     print("Veritabanına bağlanıldı...")
+
+    # Retire any catalog rows that have been removed from FLEET. We don't
+    # delete: a hard delete would orphan stale UserRobot/Order/Inventory rows
+    # that reference the catalog. Marking the row unavailable + zeroing stock
+    # is enough to hide it from the marketplace and the control selection.
+    for ns in RETIRED_NAMESPACES:
+        retired = db.query(RobotCatalog).filter(RobotCatalog.ros_namespace == ns).first()
+        if retired is not None:
+            retired.is_available = False
+            retired.stock_count = 0
+            retired.ros_namespace = None  # break the chain to ros_dashboard mapping
+            print(f"Retired catalog row: {retired.name} (ns was {ns})")
 
     for r_data in FLEET:
         # Idempotent: key on ros_namespace, not on name. If you ever rename a

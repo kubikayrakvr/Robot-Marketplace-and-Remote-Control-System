@@ -48,6 +48,13 @@ class UserRobot(Base):
     nickname = Column(String) # Kullanıcının robota verdiği özel isim
     activated_at = Column(DateTime(timezone=True), server_default=func.now())
 
-    # 🤝 KRİTİK DÜZELTME: User modelindeki 'owned_robots' ile el sıkışıyoruz.
+    # Per-instance simulator state, persisted across despawns. NULL until the
+    # user has driven the robot at least once; on first spawn we use the
+    # default pose. battery_pct stays in sync with the synthetic battery node.
+    last_x = Column(Float, nullable=True)
+    last_y = Column(Float, nullable=True)
+    last_theta = Column(Float, nullable=True)
+    last_battery_pct = Column(Float, nullable=True)
+
     user = relationship("User", back_populates="owned_robots")
     inventory = relationship("RobotInventory", back_populates="user_robot")

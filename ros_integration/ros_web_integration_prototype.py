@@ -73,12 +73,8 @@ ROBOT_DATABASE: dict[str, dict] = {
         "sensors": ["imu", "scan", "camera"]
     },
     "ROB-200": {
-        "namespace": "rob200", "x": -3.0, "y": 0.5, "type": "burger", 
+        "namespace": "rob200", "x": -3.0, "y": 0.5, "type": "burger",
         "sensors": ["imu", "scan"]  # <-- Notice: No camera here!
-    },
-    "ROB-300": {
-        "namespace": "rob300", "x": 5.0,  "y": 0.5,  "type": "waffle", 
-        "sensors": ["imu", "scan", "camera"]
     },
 }
 

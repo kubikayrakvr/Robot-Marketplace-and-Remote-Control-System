@@ -1,4 +1,10 @@
 /**:
   ros__parameters:
-    spawn_signal_topic: "/spawn_signal_topic"
-    sdf_package_name: "robot_spawner"
+    spawn_signal_topic:   "/spawn_signal_topic"
+    spawn_response_topic: "/spawn_response_topic"
+    despawn_signal_topic: "/despawn_signal_topic"
+    sdf_package_name:     "robot_spawner"
+    max_active_robots:    3
+    # Synthetic battery: drain rate in % per minute. Default 100/60 ≈ 1.6667
+    # → flat in 60 minutes.
+    battery_drain_pct_per_min: 1.6667

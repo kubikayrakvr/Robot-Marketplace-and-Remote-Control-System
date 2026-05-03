@@ -19,7 +19,9 @@ async function authFetch(endpoint, options = {}) {
 
   if (!res.ok) {
     const body = await res.json().catch(() => ({}));
-    throw new Error(body.detail || `İstek başarısız (HTTP ${res.status})`);
+    const err = new Error(body.detail || `İstek başarısız (HTTP ${res.status})`);
+    err.status = res.status;
+    throw err;
   }
 
   if (res.status === 204) return null;

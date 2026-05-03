@@ -50,6 +50,9 @@ function ControlPanelPage() {
   const [imu, setImu] = useState({ ax: 0, ay: 0, az: 0, gx: 0, gy: 0, gz: 0 });
   const [collision, setCollision] = useState(null);
   const [latency, setLatency] = useState(null);
+  // Battery: live value comes via the synthetic battery node on /{ns}/battery_state.
+  // We seed from the value the claim returned so the UI isn't blank on first paint.
+  const [batteryPct, setBatteryPct] = useState(null);
 
   // ── Drive controls ───────────────────────────────────────────────────
   const [linSpeed, setLinSpeed] = useState(0.30);
@@ -312,14 +315,22 @@ function ControlPanelPage() {
 
     let isMounted = true;
     let currentToken = null;
-    const ns = rosRobotId.toLowerCase().replace('rob-', 'rob');
+    // The per-instance namespace ("rob100_7") is supplied by the claim
+    // response. Don't try to derive it client-side from the rosRobotId since
+    // the format ("ROB-100-7") doesn't map cleanly back to the underscore.
+    let ns = null;
 
     async function connect() {
       try {
-        const [{ token }, detail] = await Promise.all([
+        const [claim, detail] = await Promise.all([
           claimRosRobot(rosRobotId),
           fetchRosRobotById(rosRobotId).catch(() => null),
         ]);
+        const { token } = claim;
+        ns = claim.namespace || (detail && detail.namespace);
+        if (!ns) {
+          throw new Error('Sunucu robot için bir namespace döndürmedi.');
+        }
 
         if (!isMounted) {
           releaseRosRobot(rosRobotId, token).catch(() => {});
@@ -330,6 +341,14 @@ function ControlPanelPage() {
         setSessionToken(token);
         if (detail && Array.isArray(detail.sensors)) {
           setSensors(detail.sensors);
+        }
+        // Seed battery from whichever source has a value — claim response
+        // wins (it reflects the spawner-side starting value), then fall back
+        // to the cached robot detail.
+        if (typeof claim.battery_pct === 'number') {
+          setBatteryPct(claim.battery_pct);
+        } else if (detail && typeof detail.battery_pct === 'number') {
+          setBatteryPct(detail.battery_pct);
         }
 
         heartbeatTimer.current = setInterval(() => {
@@ -483,6 +502,9 @@ function ControlPanelPage() {
               }
               break;
             }
+            case 'battery':
+              if (typeof d.pct === 'number') setBatteryPct(d.pct);
+              break;
             default:
               break;
           }
@@ -499,7 +521,15 @@ function ControlPanelPage() {
 
       } catch (err) {
         if (isMounted) {
-          setError(err.message || 'Robota bağlanılamadı. Robot kullanımda olabilir.');
+          let msg = err.message || 'Robota bağlanılamadı. Robot kullanımda olabilir.';
+          if (err.status === 429) {
+            msg = 'Simülasyon kapasitesi şu an dolu (en fazla 3 aktif robot). Lütfen birazdan tekrar deneyin.';
+          } else if (err.status === 409) {
+            msg = 'Robotun bataryası boş. Şarj olana kadar başlatılamaz.';
+          } else if (err.status === 423) {
+            msg = 'Robot şu an başka bir oturumda kullanılıyor.';
+          }
+          setError(msg);
           setStatus('Hata');
         }
       }
@@ -567,10 +597,22 @@ function ControlPanelPage() {
     ? (hasEverReceivedTelemetry ? 'disconnected' : 'connecting')
     : (isConnected ? 'connected' : 'connecting');
 
+  // World coordinates and heading come strictly from /ground_truth — never
+  // fall back to /odom (which drifts and lies after collisions). When the
+  // ground-truth stream is stale we render a placeholder instead.
   const isWorldFresh = !isPoseStale && pose.ts > 0;
-  const displayX = isWorldFresh ? pose.wx : odom.x;
-  const displayY = isWorldFresh ? pose.wy : odom.y;
-  const headingDeg = pose.heading * RAD_TO_DEG;
+  const worldX = isWorldFresh ? pose.wx : null;
+  const worldY = isWorldFresh ? pose.wy : null;
+  const worldHeadingDeg = isWorldFresh ? pose.heading * RAD_TO_DEG : null;
+
+  const batteryDisplay = batteryPct == null ? '—' : `${Math.round(batteryPct)}%`;
+  const batteryClass =
+    batteryPct == null ? 'battery-pill connecting' :
+    batteryPct <= 15 ? 'battery-pill disconnected' :
+    batteryPct <= 35 ? 'battery-pill connecting' : 'battery-pill connected';
+  const batteryIcon =
+    batteryPct == null ? '🔌' :
+    batteryPct <= 15 ? '🪫' : '🔋';
 
   const latencyClass =
     latency == null ? 'connecting' :
@@ -624,6 +666,10 @@ function ControlPanelPage() {
         <span className="strip-label">Çarpışma</span>
         <span className={`status-badge ${collisionClass}`}>
           {collision ?? '—'}
+        </span>
+        <span className="strip-label">Batarya</span>
+        <span className={`status-badge ${batteryClass}`}>
+          {batteryIcon} {batteryDisplay}
         </span>
         <span className="strip-label">Oturum</span>
         <span className="session-pill">
@@ -709,21 +755,25 @@ function ControlPanelPage() {
           <div className="panel-section">
             <div className="panel-header">
               Telemetri
-              <span className="hint">· {isWorldFresh ? 'Gazebo Ground Truth' : 'Odom Yedek'}</span>
+              <span className="hint">· {isWorldFresh ? 'Gazebo Ground Truth' : 'Ground Truth bekleniyor'}</span>
             </div>
             <div className="telemetry-grid telem-3x2">
               <div className="telemetry-box">
                 <span className="t-label">Dünya X (m)</span>
-                <span className="t-value">{displayX.toFixed(3)}</span>
+                <span className="t-value">
+                  {worldX != null ? worldX.toFixed(3) : '—'}
+                </span>
               </div>
               <div className="telemetry-box">
                 <span className="t-label">Dünya Y (m)</span>
-                <span className="t-value">{displayY.toFixed(3)}</span>
+                <span className="t-value">
+                  {worldY != null ? worldY.toFixed(3) : '—'}
+                </span>
               </div>
               <div className="telemetry-box">
-                <span className="t-label">Yön (°)</span>
+                <span className="t-label">Dünya Yön (°)</span>
                 <span className="t-value">
-                  {Number.isFinite(headingDeg) ? headingDeg.toFixed(1) : '—'}
+                  {worldHeadingDeg != null ? worldHeadingDeg.toFixed(1) : '—'}
                 </span>
               </div>
               <div className="telemetry-box">
@@ -735,8 +785,8 @@ function ControlPanelPage() {
                 <span className="t-value">{odom.y.toFixed(3)}</span>
               </div>
               <div className="telemetry-box">
-                <span className="t-label">Yaw (rad/s)</span>
-                <span className="t-value">{imu.gz.toFixed(3)}</span>
+                <span className="t-label">{batteryIcon} Batarya</span>
+                <span className="t-value">{batteryDisplay}</span>
               </div>
             </div>
           </div>

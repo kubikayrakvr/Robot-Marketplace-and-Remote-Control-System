@@ -212,9 +212,11 @@ Pre-registered robots — edit `ROBOT_DATABASE` in the script to add or remove e
 ROBOT_DATABASE = {
     "ROB-100": {"namespace": "rob100", "x": 2.0,  "y": 1.5 },
     "ROB-200": {"namespace": "rob200", "x": -3.0, "y": -1.0},
-    "ROB-300": {"namespace": "rob300", "x": 5.0,  "y": 0.0 },
 }
 ```
+
+> Robots are spawned per-user-instance with namespaces `rob{base}_{user_robot_id}`
+> (e.g. `rob100_7`). Lab γ (`ROB-300`) was retired.
 
 ---
 

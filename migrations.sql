@@ -28,3 +28,9 @@ CREATE TABLE IF NOT EXISTS users (
     security_answer TEXT,
     is_active BOOLEAN DEFAULT TRUE
 );
+
+-- Per-instance simulator state for each user_robots row.
+ALTER TABLE user_robots ADD COLUMN IF NOT EXISTS last_x DOUBLE PRECISION;
+ALTER TABLE user_robots ADD COLUMN IF NOT EXISTS last_y DOUBLE PRECISION;
+ALTER TABLE user_robots ADD COLUMN IF NOT EXISTS last_theta DOUBLE PRECISION;
+ALTER TABLE user_robots ADD COLUMN IF NOT EXISTS last_battery_pct DOUBLE PRECISION;
