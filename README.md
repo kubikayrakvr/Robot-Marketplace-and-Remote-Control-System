@@ -304,7 +304,6 @@ Sistemde 43+ endpoint implement edilmiştir. Swagger UI ve ReDoc aracılığıyl
 - `GET /api/admin/robots` — Robot kataloğu listele
 - `POST /api/admin/robots/ekle` — Yeni robot ekle
 - `PATCH /api/admin/robots/düzenle/{robot_id}` — Robot düzenle
-- `DELETE /api/admin/robots/{robot_id}` — Robotu sil
 - `GET /api/admin/log` — Tüm audit loglarını göster
 - `GET /api/admin/reports` — Tüm raporları göster
 - `PATCH /api/admin/reports/coz/{report_id}` — Raporu çöz
