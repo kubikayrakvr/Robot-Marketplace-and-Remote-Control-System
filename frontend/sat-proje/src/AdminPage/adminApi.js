@@ -211,3 +211,8 @@ export function deleteUser(userId) {
     method: 'DELETE',
   });
 }
+
+/**Satış İstatistiği */
+export function fetchStats() {
+  return adminFetch('/api/admin/istatistik');
+}

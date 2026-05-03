@@ -30,6 +30,7 @@ import { getSession } from './auth/session';
 import './App.css';
 import ForgotPasswordPage from './LoginPage/ForgotPasswordPage';
 import ResetPasswordPage from './LoginPage/ResetPasswordPage';
+import AdminIstatistikPage from './AdminPage/AdminIstatistikPage';
 
 function ProtectedRoute({ children }) {
   const session = getSession();
@@ -212,6 +213,10 @@ function App() {
               </AdminProtectedRoute>
             }
           />
+
+	  <Route path="/admin/istatistik" element={
+	    <AdminProtectedRoute><AdminIstatistikPage /></AdminProtectedRoute>
+	  } />
 
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>

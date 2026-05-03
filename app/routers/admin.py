@@ -299,3 +299,35 @@ def delete_user(
     db.delete(user)
     db.commit()
     return {"message": "Kullanıcı tamamen silindi"}
+
+#---SATIŞ TAKİPİ---
+
+@router.get("/istatistik")
+def get_stats(db: Session = Depends(get_db), _: User = Depends(get_current_admin)):
+    from app.models.shop import Order, OrderItem
+    from sqlalchemy import func
+
+    # Toplam sipariş sayısı ve gelir
+    toplam = db.query(
+        func.count(Order.id).label("siparis_sayisi"),
+        func.sum(Order.total_amount).label("toplam_gelir")
+    ).filter(Order.status == "PAID").first()
+
+    # Robot bazlı satış
+    robot_satis = db.query(
+        RobotCatalog.name,
+        func.count(OrderItem.id).label("adet"),
+	func.sum(OrderItem.unit_price * OrderItem.quantity).label("gelir")
+    ).join(OrderItem, OrderItem.product_id == RobotCatalog.id)\
+     .join(Order, Order.id == OrderItem.order_id)\
+     .filter(Order.status == "PAID")\
+     .group_by(RobotCatalog.name).all()
+
+    return {
+        "siparis_sayisi": toplam.siparis_sayisi or 0,
+        "toplam_gelir": float(toplam.toplam_gelir or 0),
+        "robot_bazli": [
+            {"robot": r.name, "adet": r.adet, "gelir": float(r.gelir)}
+            for r in robot_satis
+        ]
+    }
