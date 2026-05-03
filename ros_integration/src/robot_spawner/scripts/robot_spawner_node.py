@@ -194,6 +194,8 @@ class RobotSpawner(Node):
 
         bridge_cmd = [
             "ros2", "run", "ros_gz_bridge", "parameter_bridge",
+            "--ros-args", "-r", f"__node:=bridge_{ns}",
+            "--",
             f"/{ns}/cmd_vel@geometry_msgs/msg/Twist]gz.msgs.Twist",
             f"/{ns}/odom@nav_msgs/msg/Odometry[gz.msgs.Odometry",
             f"/{ns}/scan@sensor_msgs/msg/LaserScan[gz.msgs.LaserScan",
@@ -201,7 +203,8 @@ class RobotSpawner(Node):
             f"/{ns}/camera/image_raw@sensor_msgs/msg/Image[gz.msgs.Image",
             f"/{ns}/camera/camera_info@sensor_msgs/msg/CameraInfo[gz.msgs.CameraInfo",
             f"/{ns}/imu@sensor_msgs/msg/Imu[gz.msgs.IMU",
-            f"/{ns}/ground_truth@geometry_msgs/msg/Pose[gz.msgs.Pose",
+            f"/model/{ns}/pose@geometry_msgs/msg/Pose[gz.msgs.Pose",
+            "--ros-args", "-r", f"/model/{ns}/pose:=/{ns}/ground_truth"
         ]
 
         controller_cmd = [
