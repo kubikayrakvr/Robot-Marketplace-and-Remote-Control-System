@@ -46,12 +46,13 @@ function AdminLayout({ children }) {
             Raporlar
           </Link>
 
-          <Link
-            to="/admin/istatistik"
-            className={`admin-nav-link ${isActive('/admin/istatistik') ? 'active' : ''}`}
-          >
-            📊 İstatistikler
-          </Link>
+	  <Link
+	    to="/admin/istatistik"
+	    className={`admin-nav-link ${isActive('/admin/istatistik') ? 'active' : ''}`}
+	  >
+	    <span className="nav-icon">📊</span>
+	    İstatistikler
+	  </Link>
 
           <div className="admin-nav-spacer" />
 

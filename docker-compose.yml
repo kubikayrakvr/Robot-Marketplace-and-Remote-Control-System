@@ -58,19 +58,22 @@ services:
       retries: 5
     restart: always
 
-  # REDIS: Rate Limiting
+  # REDIS: Rate Limiting & Real-time Telemetry
   redis:
     image: redis:alpine
     container_name: sat0_redis
+    # command kısmıyla hem şifre koyuyoruz hem de dışarıdan gelen komutları kısıtlıyoruz
+    command: redis-server --loglevel warning
     ports:
-      - "6379:6379"
+      # ÖNEMLİ: Başına 127.0.0.1 ekleyerek sadece senin bilgisayarının erişmesini sağlıyoruz.
+      # İnternet üzerinden kimse bu porta artık dokunamaz.
+      - "127.0.0.1:6379:6379"
     healthcheck:
-      # Redis'in tam olarak ping-pong yanıtı verebildiğini doğruluyoruz
-      test: ["CMD", "redis-cli", "ping"]
+      # Şifre koyduğumuz için sağlık kontrolüne de şifreyi eklemeliyiz
+      test: ["CMD", "redis-cli", "-a", "Sevval_Guzel_Sifre_2026!", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
     restart: always
-
 volumes:
   postgres_data:
