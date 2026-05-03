@@ -544,11 +544,6 @@ Projeye katkıda bulunmak için:
 
 ---
 
-## 📝 Lisans
-
-Bu proje YTÜ BLM2732 dersi için geliştirilmiştir.
-
----
 
 ## � Ekip
 
