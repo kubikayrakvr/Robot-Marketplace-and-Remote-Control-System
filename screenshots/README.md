@@ -10,10 +10,10 @@
 ### 2. Kayıt (Register)
 ![Kayıt Ekranı](./2.jpeg)
 
-### 3. Ana Sayfa (Landing Page) - İlk Hali
+### 3. Ana Sayfa (Landing Page) - Giriş öncesi
 ![Landing Page Before](./3.jpeg)
 
-### 4. Ana Sayfa (Landing Page) - Son Hali
+### 4. Ana Sayfa (Landing Page) - Giriş Sonrası
 ![Landing Page After](./4.jpeg)
 
 ### 5. Simülasyon - İlk Hali
