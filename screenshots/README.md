@@ -23,13 +23,13 @@
 ![Reset Your Password](./6.jpeg)
 
 ### 7. Simülasyon - Son Hali
-![Simulation After](./7.jpeg)
+![Requests](./7.jpeg)
 
 ### 8. İstekler (Requests)
-![Requests](./8.jpeg)
+![](./8.jpeg)
 
-### 9. Yönetici Paneli (Admin Page)
-![Admin Page](./9.jpeg)
+### 9. Canlı Simülasyon Finali (Live Simulation Final)
+![Live Simulation Final1](./9.jpeg)
 
-### 10. Canlı Simülasyon Finali (Live Simulation Final)
-![Live Simulation Final](./10.jpeg)
+### 10. Lidar Falan
+![Live Simulation Final2](./10.jpeg)
