@@ -22,7 +22,7 @@
 ### 6. Şifre Sıfırlama (Reset Password)
 ![Reset Your Password](./6.jpeg)
 
-### 7. Simülasyon - Son Hali
+### 7. İstekler 
 ![Requests](./7.jpeg)
 
 ### 8. İstekler (Requests)
